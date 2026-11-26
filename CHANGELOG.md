@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.2
 
 - The phone menu works like a dialog: the focus goes in and stays there, Escape closes it, and the focus comes back to the ☰ button. Closed, it leaves the keyboard order. A wider window or another page closes it.
 - Closing a window or the download activity panel gives the focus back to the button that opened it.
