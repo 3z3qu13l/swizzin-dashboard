@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Download, Info, MoreHorizontal, Search, Trash2 } from 'lucide-react'
-import { post, type AppRow } from '@/lib/api'
+import { post, serverTime, type AppRow } from '@/lib/api'
 import { useApps, useJobs, useMeta } from '@/lib/queries'
 import { ago } from '@/lib/format'
 import { AppIcon } from '@/components/AppIcon'
@@ -125,7 +125,7 @@ export function Packages() {
           className="mx-5 mb-3 flex w-[calc(100%-2.5rem)] items-center gap-3 rounded-lg border border-info/30 bg-info/10 px-4 py-2.5 text-left text-sm"
         >
           <span className="size-2 animate-pulse rounded-full bg-info" />
-          box is {running.kind === 'install' ? 'installing' : 'removing'} {running.app}, started {ago(running.startedAt)}. Show progress
+          box is {running.kind === 'install' ? 'installing' : 'removing'} {running.app}, started {ago(serverTime(running.startedAt))}. Show progress
         </button>
       )}
 

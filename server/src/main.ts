@@ -4,6 +4,7 @@ import { stat } from 'node:fs/promises'
 import { pipeline } from 'node:stream'
 import { extname, join, normalize } from 'node:path'
 import { timingSafeEqual } from 'node:crypto'
+import { uptime } from 'node:os'
 import { config } from './config.ts'
 import { allowedUnit, appInfo, catalog, catalogApp, forgetVersion, listApps, swizzinUsers } from './apps.ts'
 import { bandwidth, listJobs, platform, raid, readJob, updates } from './extra.ts'
@@ -34,6 +35,8 @@ function send(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
+    // the page puts server times on its own clock with it (the Date header only has whole seconds)
+    'x-server-time': String(Date.now()),
   })
   res.end(data)
 }
@@ -102,7 +105,14 @@ type Handler = (req: IncomingMessage, params: string[], url: URL) => Promise<unk
 const routes: { method: string; re: RegExp; h: Handler }[] = []
 const route = (method: string, path: string, h: Handler) => routes.push({ method, re: new RegExp(`^${path.replace(/:\w+/g, '([a-z0-9_.@-]+)')}$`), h })
 
-route('GET', '/api/meta', async () => ({ version, started, master: config.master, categories: catalog.categories }))
+// boot: when the machine started, which tells a reboot from a restart of swizdash alone
+route('GET', '/api/meta', async () => ({
+  version,
+  started,
+  boot: Math.round(Date.now() - uptime() * 1000),
+  master: config.master,
+  categories: catalog.categories,
+}))
 route('GET', '/api/summary', summary)
 route('GET', '/api/live', async () => live())
 route('GET', '/api/history', async (_r, _p, url) => {

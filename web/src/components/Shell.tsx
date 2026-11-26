@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react'
-import { NavLink } from 'react-router'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { NavLink, useLocation } from 'react-router'
 import { ChevronDown, Cpu, ExternalLink, LayoutGrid, Menu as MenuIcon, MemoryStick, Network, Palette, Search, Server, X } from 'lucide-react'
 import { useApps, useLive, useMeta } from '@/lib/queries'
 import { appUrl } from '@/lib/apps'
@@ -156,8 +156,28 @@ function SearchBox() {
   )
 }
 
+// Tailwind's lg breakpoint: from there the menu is a sidebar, below it a drawer
+const wideQuery = '(min-width: 64rem)'
+const subscribeWide = (cb: () => void) => {
+  const q = window.matchMedia(wideQuery)
+  q.addEventListener('change', cb)
+  return () => q.removeEventListener('change', cb)
+}
+const isWide = () => window.matchMedia(wideQuery).matches
+
 export function Shell({ children }: { children: ReactNode }) {
   const [nav, setNav] = useState(false)
+  const wide = useSyncExternalStore(subscribeWide, isWide)
+  const drawer = nav && !wide
+  const { pathname } = useLocation()
+  // a wider window or another page (the browser's Back button too) closes the drawer
+  const [seen, setSeen] = useState({ wide, pathname })
+  if (seen.wide !== wide || seen.pathname !== pathname) {
+    setSeen({ wide, pathname })
+    setNav(false)
+  }
+  const openNav = useRef<HTMLButtonElement>(null)
+  const closeNav = useRef<HTMLButtonElement>(null)
   const [theme, setTheme] = useTheme()
   const meta = useMeta()
   const link = ({ isActive }: { isActive: boolean }) =>
@@ -166,9 +186,28 @@ export function Shell({ children }: { children: ReactNode }) {
       isActive ? 'bg-accent/12 text-accent' : 'text-muted hover:bg-surface-2 hover:text-text',
     )
 
+  // the phone menu behaves like a dialog: focus goes in, Escape closes it, focus comes back
+  useEffect(() => {
+    if (!drawer) return
+    closeNav.current?.focus({ preventScroll: true })
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !e.defaultPrevented && setNav(false)
+    document.addEventListener('keydown', onKey)
+    const opener = openNav.current
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      opener?.focus()
+    }
+  }, [drawer])
+
   return (
     <div className="flex min-h-screen">
       <aside
+        id="sidebar"
+        role={drawer ? 'dialog' : undefined}
+        aria-modal={drawer || undefined}
+        aria-label={drawer ? 'Menu' : undefined}
+        // closed off screen, the drawer also leaves the keyboard order and screen readers
+        inert={!nav && !wide}
         className={cn(
           'fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-line bg-surface/95 backdrop-blur transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0',
           nav ? 'translate-x-0' : '-translate-x-full',
@@ -177,7 +216,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="flex h-16 items-center gap-2.5 px-5">
           <img src="/favicon.svg" alt="" className="size-7" />
           <span className="text-lg font-bold tracking-tight">swizdash</span>
-          <button className="ml-auto lg:hidden" onClick={() => setNav(false)} aria-label="Close menu">
+          <button ref={closeNav} className="ml-auto lg:hidden" onClick={() => setNav(false)} aria-label="Close menu">
             <X className="size-5 text-muted" />
           </button>
         </div>
@@ -196,9 +235,9 @@ export function Shell({ children }: { children: ReactNode }) {
       </aside>
       {nav && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setNav(false)} />}
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1" inert={drawer}>
         <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-line bg-bg/80 px-4 backdrop-blur sm:px-6">
-          <button className="lg:hidden" onClick={() => setNav(true)} aria-label="Open menu">
+          <button ref={openNav} className="lg:hidden" onClick={() => setNav(true)} aria-label="Open menu" aria-expanded={nav} aria-controls="sidebar">
             <MenuIcon className="size-5" />
           </button>
           <SearchBox />

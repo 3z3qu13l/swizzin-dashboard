@@ -1,6 +1,6 @@
 import { Dialog as D, DropdownMenu as M } from 'radix-ui'
 import { Loader2, X } from 'lucide-react'
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { useRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { cn } from '@/lib/format'
 import type { Status } from '@/lib/api'
 import type { Tone } from '@/lib/status'
@@ -141,6 +141,26 @@ export function ErrorNote({ error }: { error: unknown }) {
   return <p className="px-5 py-4 text-sm text-danger">{error instanceof Error ? error.message : 'Something went wrong'}</p>
 }
 
+// The dialogs open from state, not from a Radix trigger, so Radix has no button to give the
+// focus back to on close: remember what had it when the dialog opened.
+function useFocusReturn() {
+  const back = useRef<HTMLElement | null>(null)
+  return {
+    onOpenAutoFocus: () => {
+      const active = document.activeElement
+      // opened from a menu item, which goes away with its menu: back to the button of that menu
+      const menu = active?.closest('[role=menu]')
+      const target = menu?.id ? document.querySelector(`[aria-controls="${CSS.escape(menu.id)}"]`) : active
+      back.current = target instanceof HTMLElement ? target : null
+    },
+    onCloseAutoFocus: (e: Event) => {
+      if (!back.current?.isConnected) return
+      e.preventDefault()
+      back.current.focus()
+    },
+  }
+}
+
 export function Dialog({
   open,
   onOpenChange,
@@ -156,11 +176,13 @@ export function Dialog({
   children: ReactNode
   wide?: boolean
 }) {
+  const focusReturn = useFocusReturn()
   return (
     <D.Root open={open} onOpenChange={onOpenChange}>
       <D.Portal>
         <D.Overlay className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]" />
         <D.Content
+          {...focusReturn}
           className={cn(
             'fixed top-1/2 left-1/2 z-50 max-h-[88vh] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-xl border border-line bg-surface p-5 shadow-2xl',
             wide ? 'max-w-3xl' : 'max-w-md',
@@ -204,11 +226,15 @@ export function Sheet({
   children: ReactNode
   footer?: ReactNode
 }) {
+  const focusReturn = useFocusReturn()
   return (
     <D.Root open={open} onOpenChange={onOpenChange}>
       <D.Portal>
         <D.Overlay className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]" />
-        <D.Content className="fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl flex-col border-l border-line bg-surface shadow-2xl data-[state=open]:animate-[sheet-in_200ms_ease-out]">
+        <D.Content
+          {...focusReturn}
+          className="fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl flex-col border-l border-line bg-surface shadow-2xl data-[state=open]:animate-[sheet-in_200ms_ease-out]"
+        >
           <div className="flex items-center gap-3 border-b border-line px-5 py-4">
             <D.Title className="flex flex-1 items-center gap-2 text-base font-semibold">{title}</D.Title>
             <D.Description className="sr-only">{description}</D.Description>
