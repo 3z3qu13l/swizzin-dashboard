@@ -150,15 +150,15 @@ function SubHead({ title, checked }: { title: string; checked?: string }) {
   )
 }
 
-/** swizzin and swizdash against GitHub, apart from the apt list: GitHub can be slow or out of reach */
+/** swizzin and swizdash against their remotes, apart from the apt list: a remote can be slow or out of reach */
 function Software() {
   const q = useSoftwareUpdates()
   const checked = q.data?.map((s) => s.checkedAt).filter((t): t is number => t != null)
   return (
     <div className="px-5 pb-3">
-      <SubHead title="swizzin and swizdash" checked={checked?.length ? `Checked on GitHub ${ago(serverTime(Math.min(...checked)))}` : undefined} />
+      <SubHead title="swizzin and swizdash" checked={checked?.length ? `Checked ${ago(serverTime(Math.min(...checked)))}` : undefined} />
       {q.isPending ? (
-        <p className="py-2 text-sm text-muted">Checking GitHub…</p>
+        <p className="py-2 text-sm text-muted">Checking…</p>
       ) : q.error ? (
         <p className="py-2 text-sm text-muted">Could not check.</p>
       ) : (
@@ -169,12 +169,21 @@ function Software() {
               <span className="text-xs text-muted">
                 installed <span className="font-mono text-text">{s.installed ?? 'unknown'}</span>
               </span>
-              {s.state === 'update' ? (
-                <Badge tone="blue">{s.available} available</Badge>
+              {s.installed == null ? (
+                <Badge>could not read the installed version</Badge>
+              ) : s.state === 'update' ? (
+                <Badge tone="blue">{s.branch ? `newer commit on ${s.branch}` : `${s.available} available`}</Badge>
               ) : s.state === 'current' ? (
                 <Badge tone="green">up to date</Badge>
+              ) : s.state === 'manual' ? (
+                <Badge>managed manually</Badge>
               ) : (
                 <Badge>could not check</Badge>
+              )}
+              {s.state === 'manual' && (
+                <p className="w-full text-xs text-muted">
+                  <code className="font-mono text-text">box update</code> leaves /etc/swizzin as it is: it is a link, or has a .dev.lock file.
+                </p>
               )}
               {s.state === 'update' && (
                 <p className="w-full text-xs text-muted">

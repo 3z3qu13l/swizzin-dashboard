@@ -1,9 +1,9 @@
-import { open, readdir } from 'node:fs/promises'
+import { lstat, open, readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { config } from './config.ts'
 import { defaultIface } from './system.ts'
 import { cached, keyed, readText, run } from './util.ts'
-import { compareVersions, jobResult, parseAptList, parseCpuList, parseLsRemote, parseMdstat, parseMicrocode, throttleTotals } from './parse.ts'
+import { compareVersions, jobResult, offlineCpus, parseAptList, parseCpuList, parseLsRemote, parseMdstat, parseMicrocode, throttleTotals } from './parse.ts'
 
 // ---------- bandwidth (vnStat) ----------
 
@@ -48,46 +48,60 @@ export const updates = cached(30 * 60_000, async () => {
 // ---------- swizzin and swizdash ----------
 
 const swizzinDir = '/etc/swizzin'
-// GitHub allows 60 unauthenticated API calls an hour per address: a few hours is fresh enough
-const remoteTtl = 3 * 3600_000
+// GitHub allows 60 unauthenticated API calls an hour per address, often shared on seedbox hosts:
+// a good answer is kept a few hours, a failure 10 minutes so a dead network does not slow every visit
+const remoteTtl = (v: unknown) => (v ? 3 * 3600_000 : 10 * 60_000)
+const remoteTimeout = 8_000
 const swizdashRepo = '3z3qu13l/swizzin-dashboard'
 
 export interface SoftwareUpdate {
   name: 'swizzin' | 'swizdash'
+  /** null: the installed version could not be read */
   installed: string | null
   /** null: the check failed (offline, rate limit) */
   available: string | null
-  state: 'current' | 'update' | 'unknown'
+  /** the branch box update follows, swizzin only */
+  branch: string | null
+  /** manual: box update leaves /etc/swizzin alone (a link, or .dev.lock) */
+  state: 'current' | 'update' | 'manual' | 'unknown'
   checkedAt: number | null
   command: string
 }
 
-const swizzinGit = (args: string[]) => run('git', ['-c', 'safe.directory=*', '-C', swizzinDir, ...args])
+// --git-dir as box does: git never looks for a repository above /etc/swizzin (etckeeper's /etc)
+const swizzinGit = (args: string[]) => run('git', ['-c', `safe.directory=${swizzinDir}`, `--git-dir=${swizzinDir}/.git`, ...args])
 
-// key: "<url> <ref>". A failure is not cached, the next visit tries again.
+// key: "<url> <ref>"
 const remoteHead = keyed(remoteTtl, async (key) => {
   const [url, ref] = key.split(' ')
   // a remote that asks for a password fails at once instead of waiting for the timeout
-  const r = await run('git', ['ls-remote', '--', url, ref], 20_000, { GIT_TERMINAL_PROMPT: '0' })
+  const r = await run('git', ['ls-remote', '--', url, ref], remoteTimeout, { GIT_TERMINAL_PROMPT: '0' })
   const hash = r.ok ? parseLsRemote(r.stdout, ref) : null
-  if (!hash) throw new Error(`git ls-remote ${url} failed`)
-  return { hash, at: Date.now() }
+  return hash ? { hash, at: Date.now() } : null
 })
 
 const latestRelease = cached(remoteTtl, async () => {
-  const res = await fetch(`https://api.github.com/repos/${swizdashRepo}/releases/latest`, {
-    headers: { accept: 'application/vnd.github+json', 'user-agent': 'swizdash' },
-    signal: AbortSignal.timeout(20_000),
-  })
-  if (!res.ok) throw new Error(`GitHub answered ${res.status}`)
-  const tag = ((await res.json()) as { tag_name?: unknown }).tag_name
-  if (typeof tag !== 'string') throw new Error('No release tag')
-  return { version: tag.replace(/^v/, ''), at: Date.now() }
+  try {
+    const res = await fetch(`https://api.github.com/repos/${swizdashRepo}/releases/latest`, {
+      headers: { accept: 'application/vnd.github+json', 'user-agent': 'swizdash' },
+      signal: AbortSignal.timeout(remoteTimeout),
+    })
+    const tag = res.ok ? ((await res.json()) as { tag_name?: unknown }).tag_name : null
+    return typeof tag === 'string' ? { version: tag.replace(/^v/, ''), at: Date.now() } : null
+  } catch {
+    return null
+  }
 })
+
+const exists = (p: string) =>
+  stat(p).then(
+    () => true,
+    () => false,
+  )
 
 /** /etc/swizzin against the branch `box update` resets it to, without touching /etc/swizzin */
 async function swizzinUpdate(): Promise<SoftwareUpdate> {
-  const [head, origin, branch] = await Promise.all([
+  const [head, origin, current] = await Promise.all([
     swizzinGit(['log', '-1', '--format=%H %cs']),
     swizzinGit(['config', '--get', 'remote.origin.url']),
     swizzinGit(['symbolic-ref', '-q', '--short', 'HEAD']),
@@ -95,27 +109,34 @@ async function swizzinUpdate(): Promise<SoftwareUpdate> {
   const [hash, date] = head.ok ? head.stdout.trim().split(' ') : []
   const url = origin.stdout.trim()
   // box update follows origin/develop on the develop branch, origin/master otherwise (a detached HEAD too)
-  const ref = `refs/heads/${branch.stdout.trim() === 'develop' ? 'develop' : 'master'}`
+  const branch = current.stdout.trim() === 'develop' ? 'develop' : 'master'
+  const row = { name: 'swizzin' as const, installed: hash ? `${hash.slice(0, 7)} ${date}` : null, branch, command: 'box update' }
+  // box update does not touch a linked /etc/swizzin, nor one with a .dev.lock
+  const manual =
+    (await lstat(swizzinDir).then(
+      (s) => s.isSymbolicLink(),
+      () => false,
+    )) || (await exists(`${swizzinDir}/.dev.lock`))
+  if (manual) return { ...row, available: null, state: 'manual', checkedAt: null }
   // only https: git runs other transports (ssh, ext) as commands
-  const remote = hash && /^https:\/\/\S+$/.test(url) ? await remoteHead(`${url} ${ref}`).catch(() => null) : null
+  const remote = hash && /^https:\/\/\S+$/.test(url) ? await remoteHead(`${url} refs/heads/${branch}`) : null
   return {
-    name: 'swizzin',
-    installed: hash ? `${hash.slice(0, 7)} ${date}` : null,
+    ...row,
     available: remote ? remote.hash.slice(0, 7) : null,
     state: !remote ? 'unknown' : remote.hash === hash ? 'current' : 'update',
     checkedAt: remote?.at ?? null,
-    command: 'box update',
   }
 }
 
 /** this swizdash against the latest release, and the command that installs it */
 async function swizdashUpdate(version: string): Promise<SoftwareUpdate> {
-  const latest = await latestRelease().catch(() => null)
+  const latest = await latestRelease()
   const cmp = latest ? compareVersions(latest.version, version) : null
   return {
     name: 'swizdash',
     installed: version,
     available: latest?.version ?? null,
+    branch: null,
     state: cmp == null ? 'unknown' : cmp > 0 ? 'update' : 'current',
     checkedAt: latest?.at ?? null,
     // box installs the release swizzin pins, box update brings the newest pin. The pin itself
@@ -176,12 +197,15 @@ async function readCount(path: string): Promise<number | null> {
   return t && /^\d+$/.test(t) ? Number(t) : null
 }
 
+// lxcfs shows a container its own CPUs as online but leaves the host's as present
+const inContainer = cached(3600_000, async () => (await run('systemd-detect-virt', ['--container'])).ok)
+
 /** world-readable sysfs and procfs, no root needed. null: the machine does not report it. */
 export async function cpuHealth() {
   const online = parseCpuList((await readText(`${cpuDir}/online`)) ?? '')
   const present = parseCpuList((await readText(`${cpuDir}/present`)) ?? '')
-  // the `offline` file also lists CPUs that could be plugged in but are not there
-  const offline = present.filter((n) => !online.includes(n))
+  // the `offline` file would also list CPUs that could be plugged in but are not there
+  const off = offlineCpus(present, online, (await readText(`${cpuDir}/smt/control`)) ?? '', (await readText('/proc/cmdline')) ?? '')
   const cpus = await Promise.all(
     online.map(async (n) => ({
       package: (await readCount(`${cpuDir}/cpu${n}/topology/physical_package_id`)) ?? 0,
@@ -201,7 +225,7 @@ export async function cpuHealth() {
     controllers.map(async (mc) => ({ ce: (await readCount(`${edacDir}/${mc}/ce_count`)) ?? 0, ue: (await readCount(`${edacDir}/${mc}/ue_count`)) ?? 0 })),
   )
   return {
-    cpus: present.length ? { online: online.length, present: present.length, offline } : null,
+    cpus: present.length && !(await inContainer()) ? { online: online.length, present: present.length, ...off } : null,
     throttle: throttleTotals(cpus),
     microcode: parseMicrocode((await readText('/proc/cpuinfo')) ?? ''),
     ecc: controllers.length

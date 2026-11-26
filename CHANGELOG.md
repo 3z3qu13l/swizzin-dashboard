@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- System updates also say whether swizzin and swizdash are up to date, and how to update them: swizzin against the branch `box update` follows on the remote of `/etc/swizzin`, swizdash against its latest release on GitHub. The server checks at most every 3 hours, apart from the rest of the page. Offline or over the GitHub limit, it says "could not check".
-- The hardware panel shows CPU cores switched off, thermal throttling and ECC memory errors since the last boot, and the CPU microcode. What the machine does not report, like most virtual machines, says "Not available on this machine" rather than a green status.
+- System updates also say whether swizzin and swizdash are up to date, and how to update them: swizzin against the branch `box update` follows on the remote of `/etc/swizzin`, swizdash against its latest release on GitHub. The server checks at most every 3 hours, apart from the rest of the page. Offline or over the GitHub limit, it says "could not check" and tries again 10 minutes later. An `/etc/swizzin` that `box update` leaves alone (a link, or a `.dev.lock` file) is "managed manually".
+- The hardware panel shows CPU cores switched off, thermal throttling and ECC memory errors since the last boot, and the CPU microcode. Cores switched off on purpose (SMT off, `maxcpus=`) are not a warning. What the machine does not report, like most virtual machines and containers, says "Not available on this machine" rather than a green status.
 
 ## 0.1.2
 

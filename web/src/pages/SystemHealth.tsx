@@ -135,8 +135,16 @@ function CpuHealth({ health: h }: { health: HardwareData['health'] }) {
             notHere
           ) : h.cpus.offline.length ? (
             <>
-              <Badge tone="amber">{h.cpus.offline.length} offline</Badge>
-              <span className="block text-xs text-muted">CPU {h.cpus.offline.join(', ')}</span>
+              <Badge tone={h.cpus.reason ? 'grey' : 'amber'}>
+                {h.cpus.online} online, {h.cpus.offline.length} off
+              </Badge>
+              <span className="block text-xs text-muted">
+                {h.cpus.reason === 'smt'
+                  ? 'SMT (Hyper-Threading) is switched off'
+                  : h.cpus.reason === 'maxcpus'
+                    ? 'Limited by the maxcpus= boot option'
+                    : `CPU ${h.cpus.offline.join(', ')}`}
+              </span>
             </>
           ) : (
             <Badge tone="green">all {h.cpus.online} online</Badge>
@@ -152,9 +160,11 @@ function CpuHealth({ health: h }: { health: HardwareData['health'] }) {
               <Badge tone="amber">
                 {t.core} core, {t.package} package events
               </Badge>
-              <span className="block text-xs text-muted">
-                {t.throttledCores} core{t.throttledCores === 1 ? '' : 's'} slowed down to cool off
-              </span>
+              {t.throttledCores > 0 && (
+                <span className="block text-xs text-muted">
+                  {t.throttledCores} core{t.throttledCores === 1 ? '' : 's'} slowed down to cool off
+                </span>
+              )}
             </>
           )}
         </Row>

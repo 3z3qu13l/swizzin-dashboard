@@ -40,6 +40,23 @@ test('a failure is not cached', async () => {
   assert.equal(await get(), 2)
 })
 
+test('the TTL can depend on the value: a failed check is kept for less time', async () => {
+  let runs = 0
+  const get = cached(
+    (v) => (v ? 60_000 : 20),
+    async () => (++runs === 1 ? null : runs),
+  )
+  assert.equal(await get(), null)
+  // kept for its short TTL: no new try while it lasts
+  assert.equal(await get(), null)
+  assert.equal(runs, 1)
+  await tick(30)
+  assert.equal(await get(), 2)
+  await tick(30)
+  assert.equal(await get(), 2)
+  assert.equal(runs, 2)
+})
+
 test('keyed caches per key, and forget drops one key', async () => {
   let runs = 0
   const get = keyed(60_000, async (k) => `${k}${++runs}`)
