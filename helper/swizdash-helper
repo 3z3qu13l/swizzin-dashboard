@@ -61,27 +61,48 @@ cmd_service() {
     systemctl "$action" "${unit}.service"
 }
 
+# Runs a command as a swizzin user. setpriv opens no PAM session, so the polling
+# leaves no line in auth.log, unlike runuser or su.
+as_user() {
+    local u=$1
+    shift
+    setpriv --reuid="$u" --regid="$u" --init-groups --reset-env -- "$@"
+}
+
+# Reads a file, as its owner when it sits in a home: root following a link planted
+# there could read anything. A FIFO or a slow disk cannot hold the helper.
+read_file() {
+    local u=$1 file=$2
+    if [[ $file == /home/* ]]; then
+        timeout 3 setpriv --reuid="$u" --regid="$u" --init-groups --reset-env -- head -c 262144 "$file" 2> /dev/null
+    else
+        timeout 3 head -c 262144 "$file" 2> /dev/null
+    fi
+}
+
+# a value from a config file on stdin
 read_key() {
-    local file=$1 type=$2 key=$3
-    [[ -f $file ]] || return 0
+    local type=$1 key=$2
     case $type in
-        xml) grep -m1 -oP "<${key}>\K[^<]+" "$file" ;;
-        json) jq -r --arg k "$key" '.[$k] // empty' "$file" 2> /dev/null ;;
-        ini) grep -m1 -oP "^\s*${key}\s*=\s*\K\S+" "$file" ;;
-        yaml) grep -m1 -oP "^\s*${key}:\s*['\"]?\K[^'\"\s]+" "$file" ;;
+        xml) grep -m1 -oP "<${key}>\K[^<]+" ;;
+        json) jq -r --arg k "$key" '.[$k] // empty' 2> /dev/null ;;
+        ini) grep -m1 -oP "^\s*${key}\s*=\s*\K\S+" ;;
+        yaml) grep -m1 -oP "^\s*${key}:\s*['\"]?\K[^'\"\s]+" ;;
     esac
 }
 
 # paths that exist, the API key and, for the *arr apps, the version from their API
 cmd_appinfo() {
-    local app=${1:-} user paths key file type kname arrconf api port base version=""
+    local app=${1:-} user paths key file type kname arrconf api port base version="" conf
     valid_app "$app"
     user=$(master)
     paths=$(jq -c --arg a "$app" '.apps[] | select(.id == $a) | .paths // {}' "$catalog")
     paths=$(jq -c --arg u "$user" 'with_entries(.value |= gsub("\\{user\\}"; $u))' <<< "$paths")
     paths=$(jq -c 'to_entries' <<< "$paths" | jq -c '.[]' | while read -r entry; do
         p=$(jq -r .value <<< "$entry")
-        if [[ -e $p ]]; then e=true; else e=false; fi
+        if [[ $p == /home/* ]]; then
+            as_user "$user" test -e "$p" && e=true || e=false
+        elif [[ -e $p ]]; then e=true; else e=false; fi
         jq -c --argjson e "$e" '{(.key): {path: .value, exists: $e}}' <<< "$entry"
     done | jq -sc 'add // {}')
 
@@ -91,16 +112,17 @@ cmd_appinfo() {
         file=${file//\{user\}/$user}
         type=$(app_field "$app" '.apikey.type')
         kname=$(app_field "$app" '.apikey.key')
-        key=$(read_key "$file" "$type" "$kname")
+        key=$(read_file "$user" "$file" | read_key "$type" "$kname")
     fi
 
     arrconf=$(app_field "$app" '.version.arr')
     if [[ -n $arrconf ]]; then
-        arrconf=${arrconf//\{user\}/$user}
+        conf=$(read_file "$user" "${arrconf//\{user\}/$user}")
         api=$(app_field "$app" '.version.api')
-        port=$(read_key "$arrconf" xml Port)
-        base=$(read_key "$arrconf" xml UrlBase)
-        if [[ -n $port && -n $key ]]; then
+        port=$(read_key xml Port <<< "$conf")
+        base=$(read_key xml UrlBase <<< "$conf")
+        # the config belongs to the user: only a port and a plain path may reach the URL
+        if [[ $port =~ ^[0-9]{1,5}$ && $base =~ ^(/[A-Za-z0-9._-]+)*$ && -n $key ]]; then
             # secrets never go in arguments: any local user can read them in ps
             version=$(printf 'X-Api-Key: %s\n' "$key" | curl -fsS -m 5 -H @- "http://127.0.0.1:${port}${base}/api/${api}/system/status" 2> /dev/null | jq -r '.version // empty' 2> /dev/null)
         fi
@@ -109,7 +131,7 @@ cmd_appinfo() {
     local probe output=""
     probe=$(app_field "$app" '.version.cmd')
     if [[ $probe == *'{user}'* ]]; then
-        output=$(timeout 10 runuser -u "$user" -- /bin/sh -c "${probe//\{user\}/$user}" 2>&1 | head -c 2000)
+        output=$(timeout 10 setpriv --reuid="$user" --regid="$user" --init-groups --reset-env -- /bin/sh -c "${probe//\{user\}/$user}" 2>&1 | head -c 2000)
     fi
     # the key goes through the environment, readable by root only, not the arguments
     KEY=$key jq -nc --argjson paths "$paths" --arg version "$version" --arg output "$output" \
@@ -235,10 +257,11 @@ curl_auth() {
 
 # Every client's torrents become {name, status, progress (0 to 1), size, ratio, down, up},
 # summed up here into one object per client and user. At most 1000 torrents are listed.
-# shellcheck disable=SC2016
-summarize='
+summarize() {
+    cat << 'JQ'
 def summarize($client; $user; $folder):
-  {
+  map(.name //= "")
+  | {
     client: $client,
     user: $user,
     folder: (if $folder == "" then null else $folder end),
@@ -251,24 +274,27 @@ def summarize($client; $user; $folder):
     done: (map(.size * .progress) | add // 0),
     truncated: (length > 1000),
     items: (sort_by(.status != "downloading", .status, .name) | .[:1000] | map({name, status, progress, size, ratio}))
-  };'
+  };
+JQ
+}
 
-# reads a file of the user's home as that user: root following a link planted there could read anything
-user_file() { runuser -u "$1" -- head -c 262144 "$2" 2> /dev/null; }
+# qBittorrent bans 127.0.0.1 after 5 failed logins, which would also lock nginx out:
+# after a failed login (password changed in qBittorrent), wait an hour before trying again
+qbt_mark=/run/swizdash-qbt-failed
 
-# torrents of one user, client by client. Each probe is short: the dashboard waits 30 s at most.
+# torrents of one user, client by client
 user_downloads() {
-    local u=$1 pass port sid folder jar
+    local u=$1 pass port sid folder jar reply
     pass=$(_get_user_password "$u")
     if [[ -S /var/run/${u}/.rtorrent.sock ]]; then
-        timeout 8 runuser -u "$u" -- python3 - "/var/run/${u}/.rtorrent.sock" 2> /dev/null << 'PY' |
+        timeout 6 setpriv --reuid="$u" --regid="$u" --init-groups --reset-env -- python3 - "/var/run/${u}/.rtorrent.sock" 2> /dev/null << 'PY' |
 import json, socket, sys, xmlrpc.client
 
 def call(method, *params):
     body = xmlrpc.client.dumps(params, method).encode()
     head = b"CONTENT_LENGTH\x00%d\x00SCGI\x001\x00" % len(body)
     s = socket.socket(socket.AF_UNIX)
-    s.settimeout(5)
+    s.settimeout(4)
     s.connect(sys.argv[1])
     s.sendall(b"%d:%s,%s" % (len(head), head, body))
     data = b""
@@ -287,27 +313,30 @@ for name, state, complete, active, hashing, message, size, done, ratio, down, up
     elif not state:
         status = "error" if message else "stopped"
     elif not active:
-        status = "queued"
+        # started but inactive: paused from ruTorrent
+        status = "stopped"
     else:
         status = "seeding" if complete else "downloading"
     items.append({"name": name, "status": status, "progress": done / size if size else 0, "size": size, "ratio": ratio / 1000, "down": down, "up": up})
 print(json.dumps({"folder": call("directory.default"), "items": items}))
 PY
-            jq -c --arg u "$u" "${summarize} .folder as \$f | .items | summarize(\"rtorrent\"; \$u; \$f)"
+            jq -c --arg u "$u" "$(summarize) .folder as \$f | .items | summarize(\"rtorrent\"; \$u; \$f)"
     fi
     [[ -n $pass ]] || return 0
-    if systemctl is-active -q "qbittorrent@${u}"; then
+    if systemctl is-active -q "qbittorrent@${u}" && [[ -z $(find "${qbt_mark}-${u}" -mmin -60 2> /dev/null) ]]; then
         # WebUI\Port= in [Preferences] up to 5.2, Port= in [WebUI] since 5.3
-        port=$(user_file "$u" "/home/${u}/.config/qBittorrent/qBittorrent.conf" |
+        port=$(read_file "$u" "/home/${u}/.config/qBittorrent/qBittorrent.conf" |
             awk -F= '/^\[/ {s = $0} (s == "[Preferences]" && $1 ~ /^WebUI.Port$/) || (s == "[WebUI]" && $1 == "Port") {print $2; exit}')
         if [[ $port =~ ^[0-9]+$ ]]; then
+            reply=$(printf '%s' "$pass" | curl -sS -m 3 -i -H "Referer: http://127.0.0.1:${port}" --data-urlencode "username=${u}" --data-urlencode "password@-" \
+                "http://127.0.0.1:${port}/api/v2/auth/login" 2> /dev/null)
             # the cookie is SID up to 5.2, QBT_SID_<port> since 5.3
-            sid=$(printf '%s' "$pass" | curl -fsS -m 3 -i -H "Referer: http://127.0.0.1:${port}" --data-urlencode "username=${u}" --data-urlencode "password@-" \
-                "http://127.0.0.1:${port}/api/v2/auth/login" 2> /dev/null | grep -m1 -oiP 'set-cookie:\s*\K(QBT_)?SID(_[0-9]+)?=[^;\s]+')
+            sid=$(grep -m1 -oiP 'set-cookie:\s*\K(QBT_)?SID(_[0-9]+)?=[^;\s]+' <<< "$reply")
             if [[ -n $sid ]]; then
+                rm -f "${qbt_mark}-${u}"
                 folder=$(printf 'cookie = "%s"\n' "$sid" | curl -fsS -m 3 -K - "http://127.0.0.1:${port}/api/v2/app/defaultSavePath" 2> /dev/null)
-                printf 'cookie = "%s"\n' "$sid" | curl -fsS -m 5 -K - "http://127.0.0.1:${port}/api/v2/torrents/info" 2> /dev/null |
-                    jq -c --arg u "$u" --arg f "$folder" "${summarize}"'
+                printf 'cookie = "%s"\n' "$sid" | curl -fsS -m 4 -K - "http://127.0.0.1:${port}/api/v2/torrents/info" 2> /dev/null |
+                    jq -c --arg u "$u" --arg f "$folder" "$(summarize)"'
                         map({name, size, progress, ratio, down: .dlspeed, up: .upspeed, status: (.state as $s |
                             if ($s | test("^(error|missingFiles)$")) then "error"
                             elif ($s | test("^(checking|moving)")) then "checking"
@@ -317,21 +346,24 @@ PY
                             else "downloading" end)})
                         | summarize("qbittorrent"; $u; $f)'
                 printf 'cookie = "%s"\n' "$sid" | curl -fsS -m 3 -K - -X POST "http://127.0.0.1:${port}/api/v2/auth/logout" > /dev/null 2>&1
+            elif [[ $reply == HTTP* ]]; then
+                # qBittorrent answered but refused the password
+                touch "${qbt_mark}-${u}"
             fi
         fi
     fi
     if systemctl is-active -q "transmission@${u}"; then
-        port=$(user_file "$u" "/home/${u}/.config/transmission-daemon/settings.json" | jq -r '.["rpc-port"] // .rpc_port // empty' 2> /dev/null)
+        port=$(read_file "$u" "/home/${u}/.config/transmission-daemon/settings.json" | jq -r '.["rpc-port"] // .rpc_port // empty' 2> /dev/null)
         if [[ $port =~ ^[0-9]+$ ]]; then
             # the first call answers 409 with the session id to send back
             sid=$(curl_auth "$u" "$pass" | curl -sS -m 3 -K - -i "http://127.0.0.1:${port}/transmission/rpc" 2> /dev/null | grep -m1 -oiP 'X-Transmission-Session-Id:\s*\K[A-Za-z0-9]+')
             if [[ -n $sid ]]; then
                 folder=$(curl_auth "$u" "$pass" | curl -fsS -m 3 -K - -H "X-Transmission-Session-Id: ${sid}" -d '{"method":"session-get","arguments":{"fields":["download-dir"]}}' \
                     "http://127.0.0.1:${port}/transmission/rpc" 2> /dev/null | jq -r '.arguments["download-dir"] // empty' 2> /dev/null)
-                curl_auth "$u" "$pass" | curl -fsS -m 5 -K - -H "X-Transmission-Session-Id: ${sid}" \
+                curl_auth "$u" "$pass" | curl -fsS -m 4 -K - -H "X-Transmission-Session-Id: ${sid}" \
                     -d '{"method":"torrent-get","arguments":{"fields":["name","status","percentDone","sizeWhenDone","uploadRatio","rateDownload","rateUpload","error"]}}' \
                     "http://127.0.0.1:${port}/transmission/rpc" 2> /dev/null |
-                    jq -c --arg u "$u" --arg f "$folder" "${summarize}"'
+                    jq -c --arg u "$u" --arg f "$folder" "$(summarize)"'
                         .arguments.torrents
                         | map({name, size: .sizeWhenDone, progress: .percentDone, ratio: ([.uploadRatio, 0] | max), down: .rateDownload, up: .rateUpload, status: (
                             if .error != 0 then "error"
@@ -346,7 +378,7 @@ PY
     fi
     if systemctl is-active -q "deluge-web@${u}"; then
         # web.conf holds two JSON objects, the port is in the second
-        port=$(user_file "$u" "/home/${u}/.config/deluge/web.conf" | jq -r '.port // empty' 2> /dev/null | tail -1)
+        port=$(read_file "$u" "/home/${u}/.config/deluge/web.conf" | jq -r '.port // empty' 2> /dev/null | tail -1)
         if [[ $port =~ ^[0-9]+$ ]]; then
             jar=$(mktemp)
             # the password reaches jq through the environment and curl through stdin
@@ -354,10 +386,10 @@ PY
                 curl -fsS -m 3 -c "$jar" -H 'Content-Type: application/json' -d @- "http://127.0.0.1:${port}/json" 2> /dev/null | jq -e '.result == true' > /dev/null 2>&1; then
                 folder=$(curl -fsS -m 3 -b "$jar" -H 'Content-Type: application/json' -d '{"method":"core.get_config_value","params":["download_location"],"id":2}' \
                     "http://127.0.0.1:${port}/json" 2> /dev/null | jq -r '.result // empty' 2> /dev/null)
-                curl -fsS -m 5 -b "$jar" -H 'Content-Type: application/json' \
+                curl -fsS -m 4 -b "$jar" -H 'Content-Type: application/json' \
                     -d '{"method":"web.update_ui","params":[["name","state","progress","total_wanted","ratio","download_payload_rate","upload_payload_rate"],{}],"id":3}' \
                     "http://127.0.0.1:${port}/json" 2> /dev/null |
-                    jq -c --arg u "$u" --arg f "$folder" "${summarize}"'
+                    jq -c --arg u "$u" --arg f "$folder" "$(summarize)"'
                         (.result.torrents // {}) | [.[]]
                         | map({name, size: .total_wanted, progress: (.progress / 100), ratio: ([.ratio, 0] | max), down: .download_payload_rate, up: .upload_payload_rate, status: (.state |
                             if . == "Error" then "error"
@@ -367,21 +399,28 @@ PY
                             elif . == "Seeding" then "seeding"
                             else "downloading" end)})
                         | summarize("deluge"; $u; $f)'
+                # deluge-web keeps every session in web.conf: end this one
+                curl -fsS -m 3 -b "$jar" -H 'Content-Type: application/json' -d '{"method":"auth.delete_session","params":[],"id":4}' \
+                    "http://127.0.0.1:${port}/json" > /dev/null 2>&1
             fi
             rm -f "$jar"
         fi
     fi
 }
 
-# torrents per client, every swizzin user at once to stay within the dashboard's timeout
+# torrents per client, every swizzin user at once. Each user gets 20 seconds at most,
+# below the dashboard's 30: nothing outlives the request.
 cmd_downloads() {
     local u tmp
     tmp=$(mktemp -d)
     # shellcheck source=/dev/null
     . /etc/swizzin/sources/functions/users
+    export -f user_downloads read_file curl_auth summarize _get_user_password
+    export qbt_mark
     while read -r u; do
         [[ $u =~ ^[a-z_][a-z0-9_.-]*$ ]] || continue
-        user_downloads "$u" > "${tmp}/${u}" &
+        # shellcheck disable=SC2016
+        timeout -k 2 20 bash -c 'user_downloads "$1"' _ "$u" > "${tmp}/${u}" &
     done < <(_get_user_list)
     wait
     cat "$tmp"/* 2> /dev/null | jq -sc '.'

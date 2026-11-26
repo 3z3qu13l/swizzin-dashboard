@@ -31,18 +31,30 @@ export async function readText(path: string): Promise<string | null> {
   }
 }
 
-/** Caches an async value for ttlMs; concurrent callers share one computation. */
+/**
+ * Caches an async value for ttlMs after it arrives. Callers share the computation in
+ * progress, so a slow one (the root helper) never runs twice at the same time.
+ */
 export function cached<T>(ttlMs: number, fn: () => Promise<T>): () => Promise<T> {
   let at = 0
   let value: Promise<T> | null = null
+  let running = false
   return () => {
-    const now = Date.now()
-    if (!value || now - at > ttlMs) {
-      at = now
-      value = fn().catch((e) => {
-        at = 0
-        throw e
-      })
+    if (!value || (!running && Date.now() - at > ttlMs)) {
+      running = true
+      value = fn().then(
+        (v) => {
+          at = Date.now()
+          running = false
+          return v
+        },
+        (e) => {
+          at = 0
+          running = false
+          value = null
+          throw e
+        },
+      )
     }
     return value
   }

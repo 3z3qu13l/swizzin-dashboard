@@ -136,7 +136,7 @@ function ClientView({ d }: { d: Download }) {
 
 /** Torrents of every client and user, read only: the clients' own pages manage them. */
 export function DownloadActivity({ open, onOpenChange, initial }: { open: boolean; onOpenChange: (o: boolean) => void; initial: string | null }) {
-  const q = useDownloads()
+  const q = useDownloads(true)
   const list = q.data ?? []
   const [picked, setPicked] = useState<string | null>(initial)
   const current = list.find((d) => downloadKey(d) === picked) ?? list[0]
@@ -158,9 +158,11 @@ export function DownloadActivity({ open, onOpenChange, initial }: { open: boolea
         </div>
       }
     >
+      {/* a failed refresh keeps the last list on screen, with the error above it */}
+      {q.error && q.data && <ErrorNote error={q.error} />}
       {q.isPending ? (
         <Spinner />
-      ) : q.error ? (
+      ) : !q.data ? (
         <ErrorNote error={q.error} />
       ) : !current ? (
         <Empty title="No torrent client is running" />

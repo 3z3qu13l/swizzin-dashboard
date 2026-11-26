@@ -127,7 +127,7 @@ function Downloads() {
       <div className="flex flex-wrap gap-2 px-5 pb-4">
         {q.isPending ? (
           <Spinner />
-        ) : q.error ? (
+        ) : !q.data ? (
           <ErrorNote error={q.error} />
         ) : list.length === 0 ? (
           <Empty title="No torrent client is running" />

@@ -91,7 +91,7 @@ const fail2ban = cached(60_000, async () => {
   return { ...r, events: r.events?.map((e) => ({ ...e, at: Date.parse(e.at) })).filter((e) => Number.isFinite(e.at)) }
 })
 const quota = cached(60_000, () => helperJson<unknown>(['quota']))
-const downloads = cached(10_000, () => helperJson<unknown[]>(['downloads'], 30_000))
+const downloads = cached(60_000, () => helperJson<unknown[]>(['downloads'], 30_000))
 
 async function summary() {
   const [cpu, ds, temp, freq, sys] = await Promise.all([cpuInfo(), disks(), cpuTemp(), cpuFreqMhz(), osInfo()])
@@ -124,7 +124,11 @@ route('GET', '/api/system/hardware', async () => {
 route('GET', '/api/system/smart', smart)
 route('GET', '/api/system/fail2ban', fail2ban)
 route('GET', '/api/system/quota', quota)
-route('GET', '/api/downloads', downloads)
+// the card only needs the counts, the list of torrents goes to the open panel
+route('GET', '/api/downloads', async (_r, _p, url) => {
+  const list = (await downloads()) as { items?: unknown[] }[]
+  return url.searchParams.get('items') === '0' ? list.map((d) => ({ ...d, items: [] })) : list
+})
 route('POST', '/api/system/power', async (req) => {
   const b = await body(req)
   if (b.action !== 'reboot' && b.action !== 'poweroff') throw new HttpError(400, 'Unknown action')
