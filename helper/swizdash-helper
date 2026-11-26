@@ -233,60 +233,147 @@ curl_auth() {
     printf 'user = "%s"\n' "$v"
 }
 
-# active torrents of one user. Files and sockets in the user's home are read as that
-# user: root following a link planted there could read anything.
+# Every client's torrents become {name, status, progress (0 to 1), size, ratio, down, up},
+# summed up here into one object per client and user. At most 1000 torrents are listed.
+# shellcheck disable=SC2016
+summarize='
+def summarize($client; $user; $folder):
+  {
+    client: $client,
+    user: $user,
+    folder: (if $folder == "" then null else $folder end),
+    down: (map(.down) | add // 0),
+    up: (map(.up) | add // 0),
+    total: length,
+    active: (map(select(.status == "downloading")) | length),
+    counts: (reduce .[] as $t ({downloading: 0, seeding: 0, queued: 0, checking: 0, stopped: 0, error: 0}; .[$t.status] += 1)),
+    size: (map(.size) | add // 0),
+    done: (map(.size * .progress) | add // 0),
+    truncated: (length > 1000),
+    items: (sort_by(.status != "downloading", .status, .name) | .[:1000] | map({name, status, progress, size, ratio}))
+  };'
+
+# reads a file of the user's home as that user: root following a link planted there could read anything
+user_file() { runuser -u "$1" -- head -c 262144 "$2" 2> /dev/null; }
+
+# torrents of one user, client by client. Each probe is short: the dashboard waits 30 s at most.
 user_downloads() {
-    local u=$1 pass port sid conf
+    local u=$1 pass port sid folder jar
     pass=$(_get_user_password "$u")
     if [[ -S /var/run/${u}/.rtorrent.sock ]]; then
-        timeout 8 runuser -u "$u" -- python3 - "/var/run/${u}/.rtorrent.sock" "$u" 2> /dev/null << 'PY'
+        timeout 8 runuser -u "$u" -- python3 - "/var/run/${u}/.rtorrent.sock" 2> /dev/null << 'PY' |
 import json, socket, sys, xmlrpc.client
-sock, user = sys.argv[1], sys.argv[2]
-body = xmlrpc.client.dumps(("", "default", "d.is_active=", "d.complete=", "d.down.rate="), "d.multicall2").encode()
-head = b"CONTENT_LENGTH\x00%d\x00SCGI\x001\x00" % len(body)
-s = socket.socket(socket.AF_UNIX); s.settimeout(5); s.connect(sock)
-s.sendall(b"%d:%s,%s" % (len(head), head, body))
-data = b""
-while chunk := s.recv(65536):
-    data += chunk
-    if len(data) > 8 << 20:
-        sys.exit(1)
-rows = xmlrpc.client.loads(data.split(b"\r\n\r\n", 1)[1])[0][0]
-active = sum(1 for a, c, r in rows if a == 1 and (c == 0 or r > 0))
-print(json.dumps({"client": "rtorrent", "user": user, "active": active, "total": len(rows)}))
+
+def call(method, *params):
+    body = xmlrpc.client.dumps(params, method).encode()
+    head = b"CONTENT_LENGTH\x00%d\x00SCGI\x001\x00" % len(body)
+    s = socket.socket(socket.AF_UNIX)
+    s.settimeout(5)
+    s.connect(sys.argv[1])
+    s.sendall(b"%d:%s,%s" % (len(head), head, body))
+    data = b""
+    while chunk := s.recv(65536):
+        data += chunk
+        if len(data) > 32 << 20:
+            sys.exit(1)
+    s.close()
+    return xmlrpc.client.loads(data.split(b"\r\n\r\n", 1)[1])[0][0]
+
+fields = ["d.name=", "d.state=", "d.complete=", "d.is_active=", "d.hashing=", "d.message=", "d.size_bytes=", "d.completed_bytes=", "d.ratio=", "d.down.rate=", "d.up.rate="]
+items = []
+for name, state, complete, active, hashing, message, size, done, ratio, down, up in call("d.multicall2", "", "default", *fields):
+    if hashing:
+        status = "checking"
+    elif not state:
+        status = "error" if message else "stopped"
+    elif not active:
+        status = "queued"
+    else:
+        status = "seeding" if complete else "downloading"
+    items.append({"name": name, "status": status, "progress": done / size if size else 0, "size": size, "ratio": ratio / 1000, "down": down, "up": up})
+print(json.dumps({"folder": call("directory.default"), "items": items}))
 PY
+            jq -c --arg u "$u" "${summarize} .folder as \$f | .items | summarize(\"rtorrent\"; \$u; \$f)"
     fi
     [[ -n $pass ]] || return 0
     if systemctl is-active -q "qbittorrent@${u}"; then
-        conf=$(runuser -u "$u" -- head -c 65536 "/home/${u}/.config/qBittorrent/qBittorrent.conf" 2> /dev/null)
         # WebUI\Port= in [Preferences] up to 5.2, Port= in [WebUI] since 5.3
-        port=$(awk -F= '/^\[/ {s = $0} (s == "[Preferences]" && $1 ~ /^WebUI.Port$/) || (s == "[WebUI]" && $1 == "Port") {print $2; exit}' <<< "$conf")
+        port=$(user_file "$u" "/home/${u}/.config/qBittorrent/qBittorrent.conf" |
+            awk -F= '/^\[/ {s = $0} (s == "[Preferences]" && $1 ~ /^WebUI.Port$/) || (s == "[WebUI]" && $1 == "Port") {print $2; exit}')
         if [[ $port =~ ^[0-9]+$ ]]; then
             # the cookie is SID up to 5.2, QBT_SID_<port> since 5.3
             sid=$(printf '%s' "$pass" | curl -fsS -m 3 -i -H "Referer: http://127.0.0.1:${port}" --data-urlencode "username=${u}" --data-urlencode "password@-" \
                 "http://127.0.0.1:${port}/api/v2/auth/login" 2> /dev/null | grep -m1 -oiP 'set-cookie:\s*\K(QBT_)?SID(_[0-9]+)?=[^;\s]+')
             if [[ -n $sid ]]; then
-                printf 'cookie = "%s"\n' "$sid" | curl -fsS -m 3 -K - "http://127.0.0.1:${port}/api/v2/torrents/info" 2> /dev/null |
-                    jq -c --arg u "$u" '{client: "qbittorrent", user: $u, active: map(select(.state | test("^(downloading|forcedDL|metaDL|stalledDL|queuedDL|checkingDL|forcedMetaDL)$"))) | length, total: length}'
+                folder=$(printf 'cookie = "%s"\n' "$sid" | curl -fsS -m 3 -K - "http://127.0.0.1:${port}/api/v2/app/defaultSavePath" 2> /dev/null)
+                printf 'cookie = "%s"\n' "$sid" | curl -fsS -m 5 -K - "http://127.0.0.1:${port}/api/v2/torrents/info" 2> /dev/null |
+                    jq -c --arg u "$u" --arg f "$folder" "${summarize}"'
+                        map({name, size, progress, ratio, down: .dlspeed, up: .upspeed, status: (.state as $s |
+                            if ($s | test("^(error|missingFiles)$")) then "error"
+                            elif ($s | test("^(checking|moving)")) then "checking"
+                            elif ($s | test("^(paused|stopped)")) then "stopped"
+                            elif ($s | test("^queued")) then "queued"
+                            elif ($s | test("(UP|uploading)$")) then "seeding"
+                            else "downloading" end)})
+                        | summarize("qbittorrent"; $u; $f)'
                 printf 'cookie = "%s"\n' "$sid" | curl -fsS -m 3 -K - -X POST "http://127.0.0.1:${port}/api/v2/auth/logout" > /dev/null 2>&1
             fi
         fi
     fi
     if systemctl is-active -q "transmission@${u}"; then
-        port=$(runuser -u "$u" -- head -c 65536 "/home/${u}/.config/transmission-daemon/settings.json" 2> /dev/null | jq -r '.["rpc-port"] // .rpc_port // empty' 2> /dev/null)
+        port=$(user_file "$u" "/home/${u}/.config/transmission-daemon/settings.json" | jq -r '.["rpc-port"] // .rpc_port // empty' 2> /dev/null)
         if [[ $port =~ ^[0-9]+$ ]]; then
             # the first call answers 409 with the session id to send back
             sid=$(curl_auth "$u" "$pass" | curl -sS -m 3 -K - -i "http://127.0.0.1:${port}/transmission/rpc" 2> /dev/null | grep -m1 -oiP 'X-Transmission-Session-Id:\s*\K[A-Za-z0-9]+')
             if [[ -n $sid ]]; then
-                curl_auth "$u" "$pass" | curl -fsS -m 3 -K - -H "X-Transmission-Session-Id: ${sid}" -d '{"method":"torrent-get","arguments":{"fields":["status"]}}' \
+                folder=$(curl_auth "$u" "$pass" | curl -fsS -m 3 -K - -H "X-Transmission-Session-Id: ${sid}" -d '{"method":"session-get","arguments":{"fields":["download-dir"]}}' \
+                    "http://127.0.0.1:${port}/transmission/rpc" 2> /dev/null | jq -r '.arguments["download-dir"] // empty' 2> /dev/null)
+                curl_auth "$u" "$pass" | curl -fsS -m 5 -K - -H "X-Transmission-Session-Id: ${sid}" \
+                    -d '{"method":"torrent-get","arguments":{"fields":["name","status","percentDone","sizeWhenDone","uploadRatio","rateDownload","rateUpload","error"]}}' \
                     "http://127.0.0.1:${port}/transmission/rpc" 2> /dev/null |
-                    jq -c --arg u "$u" '{client: "transmission", user: $u, active: ([.arguments.torrents[] | select(.status == 3 or .status == 4)] | length), total: (.arguments.torrents | length)}'
+                    jq -c --arg u "$u" --arg f "$folder" "${summarize}"'
+                        .arguments.torrents
+                        | map({name, size: .sizeWhenDone, progress: .percentDone, ratio: ([.uploadRatio, 0] | max), down: .rateDownload, up: .rateUpload, status: (
+                            if .error != 0 then "error"
+                            elif .status == 0 then "stopped"
+                            elif .status == 1 or .status == 2 then "checking"
+                            elif .status == 3 or .status == 5 then "queued"
+                            elif .status == 6 then "seeding"
+                            else "downloading" end)})
+                        | summarize("transmission"; $u; $f)'
             fi
+        fi
+    fi
+    if systemctl is-active -q "deluge-web@${u}"; then
+        # web.conf holds two JSON objects, the port is in the second
+        port=$(user_file "$u" "/home/${u}/.config/deluge/web.conf" | jq -r '.port // empty' 2> /dev/null | tail -1)
+        if [[ $port =~ ^[0-9]+$ ]]; then
+            jar=$(mktemp)
+            # the password reaches jq through the environment and curl through stdin
+            if PASS=$pass jq -nc '{method: "auth.login", params: [env.PASS], id: 1}' |
+                curl -fsS -m 3 -c "$jar" -H 'Content-Type: application/json' -d @- "http://127.0.0.1:${port}/json" 2> /dev/null | jq -e '.result == true' > /dev/null 2>&1; then
+                folder=$(curl -fsS -m 3 -b "$jar" -H 'Content-Type: application/json' -d '{"method":"core.get_config_value","params":["download_location"],"id":2}' \
+                    "http://127.0.0.1:${port}/json" 2> /dev/null | jq -r '.result // empty' 2> /dev/null)
+                curl -fsS -m 5 -b "$jar" -H 'Content-Type: application/json' \
+                    -d '{"method":"web.update_ui","params":[["name","state","progress","total_wanted","ratio","download_payload_rate","upload_payload_rate"],{}],"id":3}' \
+                    "http://127.0.0.1:${port}/json" 2> /dev/null |
+                    jq -c --arg u "$u" --arg f "$folder" "${summarize}"'
+                        (.result.torrents // {}) | [.[]]
+                        | map({name, size: .total_wanted, progress: (.progress / 100), ratio: ([.ratio, 0] | max), down: .download_payload_rate, up: .upload_payload_rate, status: (.state |
+                            if . == "Error" then "error"
+                            elif . == "Checking" or . == "Moving" then "checking"
+                            elif . == "Paused" then "stopped"
+                            elif . == "Queued" then "queued"
+                            elif . == "Seeding" then "seeding"
+                            else "downloading" end)})
+                        | summarize("deluge"; $u; $f)'
+            fi
+            rm -f "$jar"
         fi
     fi
 }
 
-# active torrents per client, every swizzin user at once to stay within the dashboard's timeout
+# torrents per client, every swizzin user at once to stay within the dashboard's timeout
 cmd_downloads() {
     local u tmp
     tmp=$(mktemp -d)

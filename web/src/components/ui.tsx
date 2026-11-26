@@ -188,6 +188,44 @@ export function Dialog({
   )
 }
 
+/** Panel sliding in from the right, for a closer look without leaving the page. */
+export function Sheet({
+  open,
+  onOpenChange,
+  title,
+  description,
+  children,
+  footer,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  title: ReactNode
+  description: string
+  children: ReactNode
+  footer?: ReactNode
+}) {
+  return (
+    <D.Root open={open} onOpenChange={onOpenChange}>
+      <D.Portal>
+        <D.Overlay className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]" />
+        <D.Content className="fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl flex-col border-l border-line bg-surface shadow-2xl data-[state=open]:animate-[sheet-in_200ms_ease-out]">
+          <div className="flex items-center gap-3 border-b border-line px-5 py-4">
+            <D.Title className="flex flex-1 items-center gap-2 text-base font-semibold">{title}</D.Title>
+            <D.Description className="sr-only">{description}</D.Description>
+            <D.Close asChild>
+              <Button variant="ghost" size="icon" aria-label="Close">
+                <X className="size-4" />
+              </Button>
+            </D.Close>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+          {footer && <div className="border-t border-line px-5 py-3 text-xs text-muted">{footer}</div>}
+        </D.Content>
+      </D.Portal>
+    </D.Root>
+  )
+}
+
 export function Menu({ trigger, children }: { trigger: ReactNode; children: ReactNode }) {
   return (
     <M.Root>

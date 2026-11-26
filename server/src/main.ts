@@ -91,7 +91,7 @@ const fail2ban = cached(60_000, async () => {
   return { ...r, events: r.events?.map((e) => ({ ...e, at: Date.parse(e.at) })).filter((e) => Number.isFinite(e.at)) }
 })
 const quota = cached(60_000, () => helperJson<unknown>(['quota']))
-const downloads = cached(15_000, () => helperJson<unknown[]>(['downloads'], 30_000))
+const downloads = cached(10_000, () => helperJson<unknown[]>(['downloads'], 30_000))
 
 async function summary() {
   const [cpu, ds, temp, freq, sys] = await Promise.all([cpuInfo(), disks(), cpuTemp(), cpuFreqMhz(), osInfo()])

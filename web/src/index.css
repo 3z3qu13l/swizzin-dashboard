@@ -104,6 +104,13 @@ body {
   background: color-mix(in oklab, var(--accent) 35%, transparent);
 }
 
+@keyframes sheet-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

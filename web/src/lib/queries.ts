@@ -11,7 +11,7 @@ export const useHardware = () => useQuery({ queryKey: ['hardware'], queryFn: () 
 export const useSmart = () => useQuery({ queryKey: ['smart'], queryFn: () => get<Smart>('/api/system/smart'), staleTime: 5 * 60_000 })
 export const useFail2ban = () => useQuery({ queryKey: ['fail2ban'], queryFn: () => get<Fail2ban>('/api/system/fail2ban'), refetchInterval: 60_000 })
 export const useQuota = () => useQuery({ queryKey: ['quota'], queryFn: () => get<Quota>('/api/system/quota'), refetchInterval: 60_000 })
-export const useDownloads = () => useQuery({ queryKey: ['downloads'], queryFn: () => get<Download[]>('/api/downloads'), refetchInterval: 15_000 })
+export const useDownloads = () => useQuery({ queryKey: ['downloads'], queryFn: () => get<Download[]>('/api/downloads'), refetchInterval: 10_000 })
 export const useJobs = () => useQuery({ queryKey: ['jobs'], queryFn: () => get<Job[]>('/api/jobs'), refetchInterval: 5_000 })
 export const useHistory = (range: string) =>
   useQuery({

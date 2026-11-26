@@ -2,7 +2,7 @@
 
 A web dashboard for [swizzin](https://swizzin.ltd) seedboxes. It runs next to the swizzin panel and Homepage, on its own HTTPS port, behind the swizzin login of the master user.
 
-- **App dashboard**: disk space, CPU and memory, active torrents, and every installed app with its status, version, port, services, files and API key. Start, stop, restart or open each app.
+- **App dashboard**: disk space, CPU and memory, active torrents with a download activity panel (every torrent of rTorrent, qBittorrent, Transmission and Deluge, read only), and every installed app with its status, version, port, services, files and API key. Start, stop, restart or open each app.
 - **Package management**: install and remove apps with `box`, and follow the log while it runs.
 - **Software menu**: the installed apps by category, one click away.
 - **System dashboard**: live usage, 30 days of history, daily traffic (vnStat), hardware and CPU vulnerabilities, RAID and SMART, Fail2Ban bans, pending system updates, restart or shut down the server.

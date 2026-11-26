@@ -199,11 +199,24 @@ export interface Quota {
   limit?: number
 }
 
+export type TorrentStatus = 'downloading' | 'seeding' | 'queued' | 'checking' | 'stopped' | 'error'
+
+/** one torrent client of one swizzin user */
 export interface Download {
-  client: string
+  client: 'rtorrent' | 'qbittorrent' | 'transmission' | 'deluge'
   user: string
-  active: number
+  folder: string | null
+  /** bytes per second */
+  down: number
+  up: number
   total: number
+  active: number
+  counts: Record<TorrentStatus, number>
+  size: number
+  done: number
+  /** more than the 1000 torrents listed */
+  truncated: boolean
+  items: { name: string; status: TorrentStatus; progress: number; size: number; ratio: number }[]
 }
 
 export interface Job {

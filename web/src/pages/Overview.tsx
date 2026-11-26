@@ -4,7 +4,9 @@ import { useDownloads, useLive, useQuota, useSummary } from '@/lib/queries'
 import { bytes, pct } from '@/lib/format'
 import { Ring } from '@/components/charts'
 import { useThemeColors } from '@/lib/hooks'
-import { Bar, Card, CardHead, Empty, ErrorNote, Segmented, Spinner } from '@/components/ui'
+import { Bar, Button, Card, CardHead, Empty, ErrorNote, Segmented, Spinner } from '@/components/ui'
+import { DownloadActivity } from '@/components/DownloadActivity'
+import { clientNames, downloadKey } from '@/lib/downloads'
 
 function Storage() {
   const s = useSummary()
@@ -103,42 +105,50 @@ function Resources() {
   )
 }
 
-const clientNames: Record<string, string> = { rtorrent: 'rTorrent', qbittorrent: 'qBittorrent', transmission: 'Transmission' }
-
 function Downloads() {
   const q = useDownloads()
-  const byClient = new Map<string, { active: number; total: number }>()
-  for (const d of q.data ?? []) {
-    const c = byClient.get(d.client) ?? { active: 0, total: 0 }
-    c.active += d.active
-    c.total += d.total
-    byClient.set(d.client, c)
-  }
-  const active = [...byClient.values()].reduce((a, b) => a + b.active, 0)
+  const [open, setOpen] = useState<string | null>(null)
+  const list = q.data ?? []
+  const active = list.reduce((a, d) => a + d.active, 0)
   return (
     <Card className="lg:col-span-4">
       <CardHead
         icon={<Download className="size-4" />}
         title={q.data ? `${active} active download${active === 1 ? '' : 's'}` : 'Downloads'}
-        hint="rTorrent, qBittorrent and Transmission, every user"
+        hint="rTorrent, qBittorrent, Transmission and Deluge, every user"
+        right={
+          list.length > 0 ? (
+            <Button size="sm" variant="ghost" onClick={() => setOpen(downloadKey(list[0]))}>
+              Show torrents
+            </Button>
+          ) : null
+        }
       />
       <div className="flex flex-wrap gap-2 px-5 pb-4">
         {q.isPending ? (
           <Spinner />
         ) : q.error ? (
           <ErrorNote error={q.error} />
-        ) : byClient.size === 0 ? (
+        ) : list.length === 0 ? (
           <Empty title="No torrent client is running" />
         ) : (
-          [...byClient].map(([client, c]) => (
-            <span key={client} className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface-2/60 px-3 py-1.5 text-sm">
-              {clientNames[client] ?? client}
-              <span className="rounded-md bg-accent/15 px-1.5 text-xs font-semibold text-accent">{c.active}</span>
-              <span className="text-xs text-muted">of {c.total}</span>
-            </span>
+          list.map((d) => (
+            <button
+              key={downloadKey(d)}
+              type="button"
+              onClick={() => setOpen(downloadKey(d))}
+              className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface-2/60 px-3 py-1.5 text-sm hover:border-accent/50"
+            >
+              {clientNames[d.client]}
+              {new Set(list.map((x) => x.user)).size > 1 && <span className="text-xs text-muted">{d.user}</span>}
+              <span className="rounded-md bg-accent/15 px-1.5 text-xs font-semibold text-accent">{d.active}</span>
+              <span className="text-xs text-muted">of {d.total}</span>
+            </button>
           ))
         )}
       </div>
+      {/* mounted per opening, so it starts on the client that was clicked */}
+      {open && <DownloadActivity open onOpenChange={(o) => !o && setOpen(null)} initial={open} />}
     </Card>
   )
 }
