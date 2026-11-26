@@ -15,7 +15,7 @@ From a swizzin server whose `/etc/swizzin` comes from [3z3qu13l/swizzin](https:/
 box install swizdash
 ```
 
-The address is printed at the end (`https://<server>:8444` unless that port is taken). `box upgrade swizdash` installs the latest release and `box remove swizdash` removes it.
+The address is printed at the end (`https://<server>:8444` unless that port is taken). `box upgrade swizdash` installs the release swizzin pins (after `box update`) and `box remove swizdash` removes it.
 
 Tested on Debian 13 and Ubuntu 26.04. Needs Node.js 24 or newer, which `box` installs if needed.
 
@@ -42,9 +42,8 @@ The dashboard can start services and run `box` as root, so every layer limits wh
 6. The code in `/opt/swizdash` and the catalog belong to root, the `swizdash` user cannot change what the helper reads.
 7. Passwords and API keys never appear in command lines, where any local user could read them: the helper hands them to `curl` and `jq` through standard input or the environment.
 8. Files and sockets in a user's home are read as that user, never as root.
-9. `box` checks the SHA-256 of the downloaded archive before installing it.
-
-Known limit: nginx workers keep the token in memory and run as `www-data`, like PHP (ruTorrent). A `www-data` process taken over through a web app flaw could read it where the kernel allows it (`kernel.yama.ptrace_scope = 0`, the Debian default), then use the dashboard. Setting `kernel.yama.ptrace_scope = 1` closes that path.
+9. `box` checks the SHA-256 of the downloaded archive before installing it: swizzin pins the version and its checksum.
+10. nginx workers keep the token in memory and run as `www-data`, like PHP (ruTorrent). With `kernel.yama.ptrace_scope = 0`, the Debian default, any `www-data` process could read that memory: `box install` and `box upgrade swizdash` set it to 1, and `box remove swizdash` puts 0 back only where swizdash changed it. Ubuntu already uses 1.
 
 ### The catalog
 
@@ -55,17 +54,20 @@ Known limit: nginx workers keep the token in memory and run as `www-data`, like 
 ```
 npm ci --prefix web
 npm run check      # types, lint, formatting
+npm test           # server unit tests
 npm run build      # web app in dist/public
 npm run package    # dist/swizdash.tar.gz
 ```
 
 For the web app, start a server on a test machine with `SWIZDASH_PORT=8799 SWIZDASH_TOKEN_FILE=<file> node server/src/main.ts`, open a tunnel with `ssh -L 8799:127.0.0.1:8799 root@<server>`, then run `SWIZDASH_DEV_TOKEN=<token> npm --prefix web run dev`.
 
-To try a local build: `SWIZDASH_ARCHIVE=/root/swizdash.tar.gz box install swizdash`.
+To try a local build: `SWIZDASH_ARCHIVE=/root/swizdash.tar.gz box install swizdash` (or `box upgrade swizdash`). Then copy `scripts/smoke.sh` to that server and run it as root: it checks the services, permissions, protections and API.
 
 ## Release
 
-Set the version in `package.json`, then push a matching tag (`v0.1.0`). The Release workflow checks, builds and publishes `swizdash.tar.gz`, which `box install` and `box upgrade` download.
+1. Set the version in `package.json` and `web/package.json`, and give the `CHANGELOG.md` section that number.
+2. Push a matching tag (`v0.1.2`). The Release workflow checks, tests, builds and publishes `swizdash.tar.gz` and its `.sha256`.
+3. In [3z3qu13l/swizzin](https://github.com/3z3qu13l/swizzin), set `swizdash_version` and `swizdash_sha256` in `sources/functions/swizdash`: `box install` and `box upgrade` only install that release.
 
 ## License
 
