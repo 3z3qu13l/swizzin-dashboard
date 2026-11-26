@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { config } from './config.ts'
 import { defaultIface } from './system.ts'
 import { cached, readText, run } from './util.ts'
+import { jobResult, parseAptList, parseMdstat } from './parse.ts'
 
 // ---------- bandwidth (vnStat) ----------
 
@@ -41,54 +42,14 @@ export const bandwidth = cached(60_000, async () => {
 
 export const updates = cached(30 * 60_000, async () => {
   const r = await run('apt', ['list', '--upgradable'], 60_000)
-  const pkgs = r.stdout
-    .split('\n')
-    .map((l) => /^([^/\s]+)\/(\S+)\s+(\S+)\s+\S+\s+\[upgradable from: ([^\]]+)\]/.exec(l))
-    .filter((m): m is RegExpExecArray => !!m)
-    .map((m) => ({ name: m[1], origin: m[2], version: m[3], from: m[4], security: /security/.test(m[2]) }))
-  return { checkedAt: Date.now(), packages: pkgs }
+  return { checkedAt: Date.now(), packages: parseAptList(r.stdout) }
 })
 
 // ---------- RAID ----------
 
 export async function raid() {
   const text = await readText('/proc/mdstat')
-  if (!text) return { available: false, arrays: [] }
-  const arrays = []
-  const lines = text.split('\n')
-  for (let i = 0; i < lines.length; i++) {
-    const m = /^(md\w+)\s*:\s*(\w+)\s+(?:\(\w+\)\s+)?(raid\d+|linear)\s+(.*)$/.exec(lines[i])
-    if (!m) continue
-    const devices = m[4]
-      .split(/\s+/)
-      .map((d) => /^(\w+)\[\d+\](\((\w)\))?/.exec(d))
-      .filter((x): x is RegExpExecArray => !!x)
-      .map((x) => ({ name: x[1], state: x[3] === 'F' ? 'faulty' : x[3] === 'S' ? 'spare' : 'active' }))
-    const status = lines[i + 1] ?? ''
-    const sync = lines[i + 2] ?? ''
-    const counts = /\[(\d+)\/(\d+)\]/.exec(status)
-    const progress = /(recovery|resync|reshape|check)\s*=\s*([\d.]+)%.*?finish=([\d.]+min).*?speed=(\S+)/.exec(sync)
-    const total = counts ? Number(counts[1]) : devices.length
-    const up = counts ? Number(counts[2]) : devices.length
-    let mount: string | null = null
-    const mounts = (await readText('/proc/mounts')) ?? ''
-    mount =
-      mounts
-        .split('\n')
-        .find((l) => l.startsWith(`/dev/${m[1]} `))
-        ?.split(' ')[1] ?? null
-    arrays.push({
-      name: m[1],
-      state: m[2],
-      level: m[3],
-      mount,
-      devices,
-      total,
-      up,
-      health: up < total ? (progress ? 'rebuilding' : 'degraded') : progress ? 'syncing' : 'healthy',
-      progress: progress ? { action: progress[1], percent: Number(progress[2]), finish: progress[3], speed: progress[4] } : null,
-    })
-  }
+  const arrays = text ? parseMdstat(text, (await readText('/proc/mounts')) ?? '') : []
   return { available: arrays.length > 0, arrays }
 }
 
@@ -159,19 +120,13 @@ export async function readJob(id: string, withLog = false): Promise<(Job & { log
   if (!meta) return null
   const [kind, app] = meta.trim().split(' ')
   const log = await tail(join(jobsDir(), `${id}.log`), withLog ? 200_000 : 256)
-  // written by the job when box ends: its exit code, and whether the app's lock file is there
-  const end = /\[swizdash\] exit (\d+) lock ([01])\s*$/.exec(log)
-  let state: Job['state'] = 'running'
-  let exitCode: number | null = null
-  if (end) {
-    exitCode = Number(end[1])
-    const locked = end[2] === '1'
-    // box prints its own errors but often exits 0, the lock file says if the app is there
-    state = exitCode === 0 && (kind === 'install' ? locked : !locked) ? 'success' : 'failed'
-  } else {
+  const result = jobResult(log, kind)
+  let state: Job['state'] = result?.state ?? 'running'
+  if (!result) {
     const r = await run('systemctl', ['is-active', `swizdash-job-${id}.service`])
     if (!['active', 'activating'].includes(r.stdout.trim())) state = 'failed'
   }
+  const exitCode = result?.exitCode ?? null
   const job: Job & { log?: string } = { id, kind, app, startedAt: Number(id.split('-')[0]) * 1000, state, exitCode }
   if (withLog) job.log = log.replace(/\[[0-9;?]*[A-Za-z]/g, '')
   return job

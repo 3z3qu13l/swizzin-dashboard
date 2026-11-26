@@ -20,6 +20,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci --prefix web
       - run: npm run check
+      - run: npm test
       - name: The tag matches package.json
         run: test "${GITHUB_REF_NAME}" = "v$(node -p 'require("./package.json").version')"
       - run: npm run build && npm run package

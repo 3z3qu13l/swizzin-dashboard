@@ -21,7 +21,9 @@ jobs:
       - run: npm ci --prefix web
       - name: Types, lint and formatting
         run: npm run check
+      - name: Unit tests
+        run: npm test
       - name: Shell scripts
-        run: shellcheck -x -s bash helper/swizdash-helper
+        run: shellcheck -x -s bash helper/swizdash-helper scripts/smoke.sh
       - name: Build and package
         run: npm run build && npm run package

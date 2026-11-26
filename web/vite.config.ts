@@ -12,6 +12,8 @@ export default defineConfig({
     outDir: '../dist/public',
     emptyOutDir: true,
     chunkSizeWarningLimit: 1200,
+    // every asset as a file: the Content-Security-Policy refuses data: fonts
+    assetsInlineLimit: 0,
     rolldownOptions: {
       output: {
         manualChunks(id: string) {

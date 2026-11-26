@@ -12,6 +12,7 @@
     "build": "npm --prefix web run build",
     "check": "npm --prefix web run check:server && npm --prefix web run check",
     "format": "npm --prefix web run format",
-    "package": "node scripts/package.mjs"
+    "package": "node scripts/package.mjs",
+    "test": "node --test server/test/"
   }
 }

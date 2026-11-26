@@ -220,6 +220,11 @@ const server = createServer(async (req, res) => {
   res.setHeader('x-content-type-options', 'nosniff')
   res.setHeader('referrer-policy', 'same-origin')
   res.setHeader('x-frame-options', 'DENY')
+  // only swizdash's own files run; styles may be inline (React and Radix set style attributes)
+  res.setHeader(
+    'content-security-policy',
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+  )
   try {
     if (!tokenOk(req)) throw new HttpError(403, 'Forbidden')
     const url = new URL(req.url ?? '/', 'http://local')

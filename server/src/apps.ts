@@ -3,6 +3,9 @@ import { readdir } from 'node:fs/promises'
 import { config } from './config.ts'
 import { helperJson } from './helper.ts'
 import { cached, keyed, readText, run, sh } from './util.ts'
+import { allowedUnit as allowedUnitOf, firstMatch, parseSystemctlShow, statusOf, type Status, type UnitState } from './parse.ts'
+
+export type { Status, UnitState }
 
 export interface CatalogApp {
   id: string
@@ -58,14 +61,6 @@ export async function installedIds(): Promise<Set<string>> {
   return out
 }
 
-export interface UnitState {
-  unit: string
-  user: string | null
-  active: string
-  sub: string
-  enabled: string
-}
-
 /** one systemctl call for every unit of the installed apps */
 async function unitStates(apps: CatalogApp[]): Promise<Map<string, UnitState>> {
   const loaded = await run('systemctl', ['list-units', '--all', '--plain', '--no-legend', '--type=service'])
@@ -84,27 +79,9 @@ async function unitStates(apps: CatalogApp[]): Promise<Map<string, UnitState>> {
       }
     }
   }
-  const out = new Map<string, UnitState>()
-  if (!wanted.size) return out
+  if (!wanted.size) return new Map()
   const show = await run('systemctl', ['show', '--property=Id,ActiveState,SubState,UnitFileState,LoadState', ...wanted], 15_000)
-  for (const block of show.stdout.split('\n\n')) {
-    const p: Record<string, string> = {}
-    for (const l of block.split('\n')) {
-      const i = l.indexOf('=')
-      if (i > 0) p[l.slice(0, i)] = l.slice(i + 1)
-    }
-    if (!p.Id || p.LoadState === 'not-found') continue
-    const name = p.Id.replace(/\.service$/, '')
-    const at = name.indexOf('@')
-    out.set(name, {
-      unit: name,
-      user: at >= 0 ? name.slice(at + 1) : null,
-      active: p.ActiveState,
-      sub: p.SubState,
-      enabled: p.UnitFileState,
-    })
-  }
-  return out
+  return parseSystemctlShow(show.stdout)
 }
 
 function unitsOf(app: CatalogApp, states: Map<string, UnitState>): UnitState[] {
@@ -122,16 +99,6 @@ function unitsOf(app: CatalogApp, states: Map<string, UnitState>): UnitState[] {
     }
   }
   return out
-}
-
-export type Status = 'running' | 'partial' | 'stopped' | 'failed' | 'none'
-
-function statusOf(units: UnitState[]): Status {
-  if (!units.length) return 'none'
-  const running = units.filter((u) => u.active === 'active' || u.active === 'activating' || u.active === 'reloading').length
-  if (running === units.length) return 'running'
-  if (units.some((u) => u.active === 'failed')) return running ? 'partial' : 'failed'
-  return running ? 'partial' : 'stopped'
 }
 
 /** local port of the app, from its nginx config */
@@ -160,11 +127,6 @@ async function linkOf(app: CatalogApp): Promise<AppRow['link']> {
     port = m ? Number(m[1]) : null
   }
   return port ? { scheme: l.scheme, port, path: l.path } : null
-}
-
-const firstMatch = (text: string, re?: string) => {
-  if (!re) return text.trim().split('\n')[0]?.trim() || null
-  return new RegExp(re, 'm').exec(text)?.[1] ?? null
 }
 
 /** installed version, without root. *arr apps answer through the helper (appinfo). */
@@ -298,5 +260,5 @@ export function forgetVersion(id: string, { reinstalled = false } = {}): void {
 }
 
 export function allowedUnit(app: CatalogApp, unit: string): boolean {
-  return app.units.some((u) => (u.endsWith('@') ? unit.startsWith(u) && /^[a-z][a-z0-9_.-]*$/.test(unit.slice(u.length)) : unit === u))
+  return allowedUnitOf(app.units, unit)
 }

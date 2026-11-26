@@ -8,8 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint src",
     "preview": "vite preview",
-    "format": "prettier --write src ../server/src ../catalog",
-    "check": "tsc -b && oxlint src && prettier --check src ../server/src ../catalog",
+    "format": "prettier --write src ../server/src ../server/test ../catalog",
+    "check": "tsc -b && oxlint src && prettier --check src ../server/src ../server/test ../catalog",
     "check:server": "tsc -p ../server/tsconfig.json"
   },
   "dependencies": {
