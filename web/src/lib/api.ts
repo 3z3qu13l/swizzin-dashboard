@@ -6,6 +6,12 @@ export class ApiError extends Error {
   }
 }
 
+// How far the server clock is ahead of this browser, from the x-server-time header of the last answer
+let clockSkew = 0
+
+/** A time the server gave, on this browser's clock, so "5 seconds ago" stays right when the clocks differ */
+export const serverTime = (ms: number) => ms - clockSkew
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
@@ -13,6 +19,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body === undefined ? undefined : JSON.stringify(body),
     credentials: 'same-origin',
   })
+  const serverNow = Number(res.headers.get('x-server-time'))
+  if (serverNow > 0) clockSkew = serverNow - Date.now()
   const text = await res.text()
   let data: unknown = null
   try {
@@ -109,6 +117,7 @@ export interface Summary {
 export interface Meta {
   version: string
   started: number
+  boot: number
   master: string
   categories: string[]
 }

@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowDownUp, ClipboardCopy, Cpu, Database, HardDrive, MemoryStick, Package, Power, RefreshCw, Server } from 'lucide-react'
-import { get, post } from '@/lib/api'
+import { get, post, serverTime, type Meta } from '@/lib/api'
 import { useBandwidth, useLive, useMeta, useSummary, useUpdates } from '@/lib/queries'
 import { ago, bytes, cn, duration, pct, rate } from '@/lib/format'
 import { useNow } from '@/lib/hooks'
@@ -150,7 +150,7 @@ function Updates() {
       <CardHead
         icon={<Package className="size-4" />}
         title="System updates"
-        hint={q.data ? `Checked ${ago(q.data.checkedAt)}` : ' '}
+        hint={q.data ? `Checked ${ago(serverTime(q.data.checkedAt))}` : ' '}
         right={
           pkgs.length > 0 ? (
             <Badge tone={security ? 'amber' : 'blue'}>
@@ -218,7 +218,7 @@ function Inventory() {
           ['Node.js', o?.node ?? '—'],
           ['swizzin', o?.swizzin ?? '—'],
           ['swizdash', meta.data?.version ?? '—'],
-          ['Running since', meta.data ? ago(meta.data.started) : '—'],
+          ['Running since', meta.data ? ago(serverTime(meta.data.started)) : '—'],
           ['Signed in as', meta.data?.master ?? '—'],
         ]}
       />
@@ -253,7 +253,34 @@ function Inventory() {
 
 function PowerDialog({ action, onClose }: { action: 'reboot' | 'poweroff' | null; onClose: () => void }) {
   const [typed, setTyped] = useState('')
-  const m = useMutation({ mutationFn: () => post('/api/system/power', { action, confirm: action }) })
+  const qc = useQueryClient()
+  const m = useMutation({
+    mutationFn: async () => {
+      const before = await get<Meta>('/api/meta')
+      await post('/api/system/power', { action, confirm: action })
+      return before
+    },
+  })
+  // a later boot time means the machine itself restarted, not only swizdash
+  // (the time comes from the uptime, a second either way)
+  const rebooted = (now?: Meta) => !!now && !!m.data && now.boot > m.data.boot + 5000
+  const back = useQuery({
+    queryKey: ['power', 'back'],
+    queryFn: () => get<Meta>('/api/meta'),
+    enabled: m.isSuccess && action === 'reboot',
+    retry: false,
+    gcTime: 0,
+    refetchInterval: (q) => (rebooted(q.state.data) ? false : 3000),
+  })
+  const isBack = rebooted(back.data)
+  const now = useNow(5000)
+  const late = m.isSuccess && !isBack && now - m.submittedAt > 5 * 60_000
+  useEffect(() => {
+    if (!isBack) return
+    // another swizdash version came up with the server: its page files have new names
+    if (back.data?.version !== m.data?.version) window.location.reload()
+    else void qc.invalidateQueries()
+  }, [isBack, back.data, m.data, qc])
   const word = action ?? ''
   const label = action === 'reboot' ? 'Restart the server' : 'Shut down the server'
   return (
@@ -268,9 +295,24 @@ function PowerDialog({ action, onClose }: { action: 'reboot' | 'poweroff' | null
       }
     >
       {m.isSuccess ? (
-        <p className="text-sm">
-          {action === 'reboot' ? 'The server restarts in a few seconds. This page comes back once it is up.' : 'The server shuts down in a few seconds.'}
-        </p>
+        <div role="status">
+          <p className="text-sm">
+            {action === 'poweroff'
+              ? 'The server shuts down in a few seconds.'
+              : isBack
+                ? 'The server is back up.'
+                : late
+                  ? 'The server is still not back after 5 minutes. Check it from your host’s console.'
+                  : 'The server restarts in a few seconds. This window tells you when it is back up.'}
+          </p>
+          {(isBack || late) && (
+            <div className="mt-4 flex justify-end">
+              <Button autoFocus onClick={onClose}>
+                Close
+              </Button>
+            </div>
+          )}
+        </div>
       ) : (
         <>
           <label className="block text-sm">

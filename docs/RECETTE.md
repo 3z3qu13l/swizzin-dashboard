@@ -74,7 +74,7 @@ Plan de recette manuelle, à dérouler dans un navigateur avant une mise en prod
 | 5.6 | System updates | Liste des paquets en attente, ou « Everything is up to date » |
 | 5.7 | Copy diagnostics | « Copied », le presse-papiers contient un JSON |
 | 5.8 | Power → Restart the server, sans taper le mot | Le bouton reste désactivé ; Cancel ferme sans rien faire |
-| 5.9 | (optionnel, serveur de test) taper `reboot` et valider | Le serveur redémarre ; swizdash revient seul après le boot |
+| 5.9 | (optionnel, serveur de test) taper `reboot` et valider | Le serveur redémarre ; une fois revenu, la fenêtre affiche « The server is back up. » et la page se met à jour |
 
 ## 6. Affichage
 
@@ -83,7 +83,7 @@ Plan de recette manuelle, à dérouler dans un navigateur avant une mise en prod
 | 6.1 | Bouton palette en haut à droite : Night, Dusk, Day | Le thème change partout, y compris les graphiques |
 | 6.2 | Recharger la page | Le thème choisi est gardé |
 | 6.3 | Ouvrir sur un téléphone, ou réduire la fenêtre | Menu derrière le bouton ☰, pas de défilement horizontal |
-| 6.4 | Naviguer au clavier (Tab, Entrée, Échap) | Le focus est visible, Échap ferme les fenêtres |
+| 6.4 | Naviguer au clavier (Tab, Entrée, Échap) | Le focus est visible, Échap ferme les fenêtres et le menu ☰, le focus revient au bouton qui les a ouverts |
 
 ## Fin de recette
 

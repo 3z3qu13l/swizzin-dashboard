@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Cpu, Fan, HardDrive, ShieldAlert, ShieldCheck, Thermometer } from 'lucide-react'
 import type { EChartsCoreOption } from 'echarts/core'
 import { useFail2ban, useHardware, useSmart } from '@/lib/queries'
+import { serverTime } from '@/lib/api'
 import { cn } from '@/lib/format'
 import { EChart } from '@/components/charts'
 import { useThemeColors } from '@/lib/hooks'
@@ -213,7 +214,7 @@ export function Fail2ban() {
   const data = q.data
   // the 7 days end when the data was read, which keeps the render pure
   const until = q.dataUpdatedAt
-  const week = useMemo(() => (data?.events ?? []).filter((e) => e.at >= until - 7 * 86400_000), [data, until])
+  const week = useMemo(() => (data?.events ?? []).map((e) => ({ ...e, at: serverTime(e.at) })).filter((e) => e.at >= until - 7 * 86400_000), [data, until])
   const option = useMemo<EChartsCoreOption>(() => {
     const days: string[] = []
     const dayOf = (ms: number) => new Date(ms).toLocaleDateString('en-CA')
