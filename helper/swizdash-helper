@@ -1,0 +1,327 @@
+#!/bin/bash
+# swizdash root helper. The dashboard runs unprivileged and may only run this script
+# through sudo (see /etc/sudoers.d/swizdash). Every argument is checked here: the
+# caller is treated as untrusted.
+set -uo pipefail
+export LC_ALL=C PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+catalog=/opt/swizdash/catalog/apps.json
+# root-owned: the dashboard user must not be able to plant links where root writes
+jobs_dir=/var/log/swizdash/jobs
+
+die() {
+    echo "swizdash-helper: $*" >&2
+    exit 2
+}
+
+master() { cut -d: -f1 < /root/.master.info; }
+
+# swizzin users, one per line
+users() {
+    # shellcheck source=/dev/null
+    . /etc/swizzin/sources/functions/users
+    _get_user_list
+}
+
+is_user() {
+    local u
+    while read -r u; do [[ $u == "$1" ]] && return 0; done < <(users)
+    return 1
+}
+
+valid_app() {
+    [[ $1 =~ ^[a-z0-9_-]{1,32}$ ]] || die "invalid app"
+    jq -e --arg a "$1" '.apps[] | select(.id == $a)' "$catalog" > /dev/null || die "unknown app"
+}
+
+app_field() { jq -r --arg a "$1" ".apps[] | select(.id == \$a) | $2 // empty" "$catalog"; }
+
+# start, stop or restart a unit listed in the catalog. Templates only for a swizzin user.
+cmd_service() {
+    local action=${1:-} unit=${2:-} base instance=""
+    [[ $action =~ ^(start|stop|restart)$ ]] || die "invalid action"
+    [[ $unit =~ ^([a-z0-9-]{1,40})(@([a-z][a-z0-9_.-]{0,31}))?$ ]] || die "invalid unit"
+    base=${BASH_REMATCH[1]}
+    instance=${BASH_REMATCH[3]}
+    if [[ -n $instance ]]; then
+        jq -e --arg u "${base}@" '[.apps[].units[]] | index($u)' "$catalog" > /dev/null || die "unit not in catalog"
+        is_user "$instance" || die "unknown user"
+    else
+        jq -e --arg u "$base" '[.apps[].units[]] | index($u)' "$catalog" > /dev/null || die "unit not in catalog"
+    fi
+    # the dashboard cannot stop itself or the web server it is reached through
+    if [[ $action == stop && $base =~ ^(swizdash|nginx)$ ]]; then
+        die "refusing to stop $base"
+    fi
+    # restarting the dashboard or nginx would cut this very request: let it answer first
+    if [[ $base =~ ^(swizdash|nginx)$ ]]; then
+        systemd-run --quiet --collect --on-active=2 /bin/systemctl "$action" "${unit}.service"
+        return
+    fi
+    systemctl "$action" "${unit}.service"
+}
+
+read_key() {
+    local file=$1 type=$2 key=$3
+    [[ -f $file ]] || return 0
+    case $type in
+        xml) grep -m1 -oP "<${key}>\K[^<]+" "$file" ;;
+        json) jq -r --arg k "$key" '.[$k] // empty' "$file" 2> /dev/null ;;
+        ini) grep -m1 -oP "^\s*${key}\s*=\s*\K\S+" "$file" ;;
+        yaml) grep -m1 -oP "^\s*${key}:\s*['\"]?\K[^'\"\s]+" "$file" ;;
+    esac
+}
+
+# paths that exist, the API key and, for the *arr apps, the version from their API
+cmd_appinfo() {
+    local app=${1:-} user paths key file type kname arrconf api port base version=""
+    valid_app "$app"
+    user=$(master)
+    paths=$(jq -c --arg a "$app" '.apps[] | select(.id == $a) | .paths // {}' "$catalog")
+    paths=$(jq -c --arg u "$user" 'with_entries(.value |= gsub("\\{user\\}"; $u))' <<< "$paths")
+    paths=$(jq -c 'to_entries' <<< "$paths" | jq -c '.[]' | while read -r entry; do
+        p=$(jq -r .value <<< "$entry")
+        if [[ -e $p ]]; then e=true; else e=false; fi
+        jq -c --argjson e "$e" '{(.key): {path: .value, exists: $e}}' <<< "$entry"
+    done | jq -sc 'add // {}')
+
+    file=$(app_field "$app" '.apikey.file')
+    key=""
+    if [[ -n $file ]]; then
+        file=${file//\{user\}/$user}
+        type=$(app_field "$app" '.apikey.type')
+        kname=$(app_field "$app" '.apikey.key')
+        key=$(read_key "$file" "$type" "$kname")
+    fi
+
+    arrconf=$(app_field "$app" '.version.arr')
+    if [[ -n $arrconf ]]; then
+        arrconf=${arrconf//\{user\}/$user}
+        api=$(app_field "$app" '.version.api')
+        port=$(read_key "$arrconf" xml Port)
+        base=$(read_key "$arrconf" xml UrlBase)
+        if [[ -n $port && -n $key ]]; then
+            # secrets never go in arguments: any local user can read them in ps
+            version=$(printf 'X-Api-Key: %s\n' "$key" | curl -fsS -m 5 -H @- "http://127.0.0.1:${port}${base}/api/${api}/system/status" 2> /dev/null | jq -r '.version // empty' 2> /dev/null)
+        fi
+    fi
+    # probes of programs in the master's home run as the master, not as root
+    local probe output=""
+    probe=$(app_field "$app" '.version.cmd')
+    if [[ $probe == *'{user}'* ]]; then
+        output=$(timeout 10 runuser -u "$user" -- /bin/sh -c "${probe//\{user\}/$user}" 2>&1 | head -c 2000)
+    fi
+    # the key goes through the environment, readable by root only, not the arguments
+    KEY=$key jq -nc --argjson paths "$paths" --arg version "$version" --arg output "$output" \
+        '{paths: $paths, apikey: (if env.KEY == "" then null else env.KEY end), version: (if $version == "" then null else $version end), versionOutput: (if $output == "" then null else $output end)}'
+}
+
+# Installs or removes an app in the background with box, one job at a time.
+cmd_job() {
+    local kind=${1:-} app=${2:-} id
+    [[ $kind =~ ^(install|remove)$ ]] || die "invalid job"
+    valid_app "$app"
+    [[ -f /usr/local/bin/swizzin/${kind}/${app}.sh ]] || die "no ${kind} script for ${app}"
+    if [[ $(app_field "$app" '.core') == true ]]; then die "${app} is managed with box only"; fi
+    if [[ $kind == install ]]; then
+        [[ $(app_field "$app" '.interactive') == true ]] && die "${app} asks questions while installing, use box install ${app} over SSH"
+        [[ -f /install/.${app}.lock ]] && die "${app} is already installed"
+    else
+        [[ $(app_field "$app" '.removeInteractive') == true ]] && die "${app} asks questions while removing, use box remove ${app} over SSH"
+        [[ -f /install/.${app}.lock ]] || die "${app} is not installed"
+    fi
+    # two requests at the same moment must not both pass the checks below
+    exec 9> /run/swizdash-helper.lock
+    flock -n 9 || die "another install or removal is starting"
+    if systemctl list-units --plain --no-legend --state=activating,active 'swizdash-job-*' | grep -q .; then
+        die "another install or removal is running"
+    fi
+    if pgrep -f '/usr/local/bin/swizzin/(install|remove|upgrade)/' > /dev/null; then
+        die "box is already running on the server"
+    fi
+    mkdir -p "$jobs_dir"
+    id="$(date +%s)-${kind}-${app}"
+    printf '%s %s\n' "$kind" "$app" > "${jobs_dir}/${id}.job"
+    # no terminal: an unexpected question gets its default answer instead of hanging.
+    # The single quotes are on purpose: the job's own bash expands $0, $1 and $?.
+    # The lock file at the end says whether the app is there, box often exits 0 on errors.
+    # shellcheck disable=SC2016
+    systemd-run --quiet --collect --unit="swizdash-job-${id}" \
+        --property=StandardInput=null \
+        --property="StandardOutput=file:${jobs_dir}/${id}.log" \
+        --property=StandardError=inherit \
+        --setenv=TERM=dumb --setenv=HOME=/root \
+        --setenv=PATH=/usr/local/sbin:/usr/local/bin:/usr/local/bin/swizzin:/usr/sbin:/usr/bin:/sbin:/bin \
+        /bin/bash -c '/usr/local/bin/swizzin/box "$0" "$1"; rc=$?; [[ -f /install/.$1.lock ]] && l=1 || l=0; echo "[swizdash] exit $rc lock $l"' "$kind" "$app" || die "could not start the job"
+    # leaves the 20 newest jobs
+    find "$jobs_dir" -maxdepth 1 -name '*.job' -printf '%T@ %p\n' | sort -rn | tail -n +21 | cut -d' ' -f2 |
+        while read -r f; do rm -f "$f" "${f%.job}.log"; done
+    echo "$id"
+}
+
+# the install and remove scripts box has, /etc/swizzin is readable by root only
+cmd_scripts() {
+    local kind
+    for kind in install remove; do
+        find "/usr/local/bin/swizzin/${kind}/" -maxdepth 1 -name '*.sh' -printf '%f\n' 2> /dev/null | sed 's/\.sh$//' |
+            jq -Rsc --arg k "$kind" '{($k): (split("\n") | map(select(. != "")))}'
+    done | jq -sc 'add'
+}
+
+cmd_smart() {
+    command -v smartctl > /dev/null || {
+        echo '{"available": false, "disks": []}'
+        return 0
+    }
+    local d out
+    {
+        for d in $(lsblk -dnpo NAME,TYPE | awk '$2 == "disk" {print $1}'); do
+            out=$(smartctl -j -H -A -i "$d" 2> /dev/null) || true
+            [[ -n $out ]] && jq -c --arg d "$d" '{device: $d, model: (.model_name // .model_family // null), passed: (.smart_status.passed // null), temperature: (.temperature.current // null), power_on_hours: (.power_on_time.hours // null), reallocated: ([.ata_smart_attributes.table[]? | select(.id == 5) | .raw.value][0] // null), type: (.device.type // null)}' <<< "$out" 2> /dev/null
+        done
+    } | jq -sc '{available: true, disks: .}'
+}
+
+cmd_fail2ban() {
+    if ! command -v fail2ban-client > /dev/null || ! systemctl is-active -q fail2ban; then
+        echo '{"available": false}'
+        return 0
+    fi
+    local jails j f tmp
+    tmp=$(mktemp -d)
+    jails=$(fail2ban-client status 2> /dev/null | grep -oP 'Jail list:\s*\K.*' | tr -d ' ' | tr ',' ' ')
+    {
+        for j in $jails; do
+            [[ $j =~ ^[A-Za-z0-9_.-]+$ ]] || continue
+            fail2ban-client status "$j" 2> /dev/null | jq -Rsc --arg j "$j" '{jail: $j, banned: ((capture("Banned IP list:\\s*(?<l>[^\\n]*)").l // "") | split(" ") | map(select(. != ""))), total: ((capture("Total banned:\\s*(?<n>[0-9]+)").n // "0") | tonumber), failed: ((capture("Currently failed:\\s*(?<n>[0-9]+)").n // "0") | tonumber)}'
+        done
+    } | jq -sc '.' > "${tmp}/jails"
+    # ban events of the last 30 days from the logs, newest log first, at most 5000
+    {
+        for f in /var/log/fail2ban.log /var/log/fail2ban.log.1; do [[ -f $f ]] && cat "$f"; done
+        for f in /var/log/fail2ban.log.*.gz; do [[ -f $f ]] && zcat "$f"; done
+    } 2> /dev/null | grep -P '\] Ban [0-9a-fA-F.:]+$' | head -n 5000 |
+        awk -v since="$(date -d '30 days ago' '+%Y-%m-%d')" '$1 >= since {jail=$0; sub(/.*\[/, "", jail); sub(/\].*/, "", jail); print $1 "T" substr($2, 1, 8), jail, $NF}' |
+        jq -Rsc 'split("\n") | map(select(. != "") | split(" ") | {at: .[0], jail: .[1], ip: .[2]})' > "${tmp}/events"
+    jq -nc --slurpfile j "${tmp}/jails" --slurpfile e "${tmp}/events" '{available: true, jails: $j[0], events: $e[0]}'
+    rm -rf "$tmp"
+}
+
+cmd_quota() {
+    local user
+    user=$(master)
+    if ! command -v quota > /dev/null || [[ ! -f /install/.quota.lock ]]; then
+        echo '{"available": false}'
+        return 0
+    fi
+    # blocks are 1 KiB
+    local usage
+    usage=$(quota -wu "$user" 2> /dev/null | awk 'NR > 2 && NF >= 4 {gsub(/\*/, "", $2); print $2, $3; exit}')
+    # no quota set for the master
+    if [[ ! $usage =~ ^[0-9]+\ [0-9]+$ ]]; then
+        echo '{"available": false}'
+        return 0
+    fi
+    jq -Rc 'split(" ") | {available: true, used: ((.[0] | tonumber) * 1024), limit: ((.[1] | tonumber) * 1024)}' <<< "$usage"
+}
+
+# curl config on stdin: the password stays out of the arguments
+curl_auth() {
+    local v="$1:$2"
+    v=${v//\\/\\\\}
+    v=${v//\"/\\\"}
+    printf 'user = "%s"\n' "$v"
+}
+
+# active torrents of one user. Files and sockets in the user's home are read as that
+# user: root following a link planted there could read anything.
+user_downloads() {
+    local u=$1 pass port sid conf
+    pass=$(_get_user_password "$u")
+    if [[ -S /var/run/${u}/.rtorrent.sock ]]; then
+        timeout 8 runuser -u "$u" -- python3 - "/var/run/${u}/.rtorrent.sock" "$u" 2> /dev/null << 'PY'
+import json, socket, sys, xmlrpc.client
+sock, user = sys.argv[1], sys.argv[2]
+body = xmlrpc.client.dumps(("", "default", "d.is_active=", "d.complete=", "d.down.rate="), "d.multicall2").encode()
+head = b"CONTENT_LENGTH\x00%d\x00SCGI\x001\x00" % len(body)
+s = socket.socket(socket.AF_UNIX); s.settimeout(5); s.connect(sock)
+s.sendall(b"%d:%s,%s" % (len(head), head, body))
+data = b""
+while chunk := s.recv(65536):
+    data += chunk
+    if len(data) > 8 << 20:
+        sys.exit(1)
+rows = xmlrpc.client.loads(data.split(b"\r\n\r\n", 1)[1])[0][0]
+active = sum(1 for a, c, r in rows if a == 1 and (c == 0 or r > 0))
+print(json.dumps({"client": "rtorrent", "user": user, "active": active, "total": len(rows)}))
+PY
+    fi
+    [[ -n $pass ]] || return 0
+    if systemctl is-active -q "qbittorrent@${u}"; then
+        conf=$(runuser -u "$u" -- head -c 65536 "/home/${u}/.config/qBittorrent/qBittorrent.conf" 2> /dev/null)
+        # WebUI\Port= in [Preferences] up to 5.2, Port= in [WebUI] since 5.3
+        port=$(awk -F= '/^\[/ {s = $0} (s == "[Preferences]" && $1 ~ /^WebUI.Port$/) || (s == "[WebUI]" && $1 == "Port") {print $2; exit}' <<< "$conf")
+        if [[ $port =~ ^[0-9]+$ ]]; then
+            # the cookie is SID up to 5.2, QBT_SID_<port> since 5.3
+            sid=$(printf '%s' "$pass" | curl -fsS -m 3 -i -H "Referer: http://127.0.0.1:${port}" --data-urlencode "username=${u}" --data-urlencode "password@-" \
+                "http://127.0.0.1:${port}/api/v2/auth/login" 2> /dev/null | grep -m1 -oiP 'set-cookie:\s*\K(QBT_)?SID(_[0-9]+)?=[^;\s]+')
+            if [[ -n $sid ]]; then
+                printf 'cookie = "%s"\n' "$sid" | curl -fsS -m 3 -K - "http://127.0.0.1:${port}/api/v2/torrents/info" 2> /dev/null |
+                    jq -c --arg u "$u" '{client: "qbittorrent", user: $u, active: map(select(.state | test("^(downloading|forcedDL|metaDL|stalledDL|queuedDL|checkingDL|forcedMetaDL)$"))) | length, total: length}'
+                printf 'cookie = "%s"\n' "$sid" | curl -fsS -m 3 -K - -X POST "http://127.0.0.1:${port}/api/v2/auth/logout" > /dev/null 2>&1
+            fi
+        fi
+    fi
+    if systemctl is-active -q "transmission@${u}"; then
+        port=$(runuser -u "$u" -- head -c 65536 "/home/${u}/.config/transmission-daemon/settings.json" 2> /dev/null | jq -r '.["rpc-port"] // .rpc_port // empty' 2> /dev/null)
+        if [[ $port =~ ^[0-9]+$ ]]; then
+            # the first call answers 409 with the session id to send back
+            sid=$(curl_auth "$u" "$pass" | curl -sS -m 3 -K - -i "http://127.0.0.1:${port}/transmission/rpc" 2> /dev/null | grep -m1 -oiP 'X-Transmission-Session-Id:\s*\K[A-Za-z0-9]+')
+            if [[ -n $sid ]]; then
+                curl_auth "$u" "$pass" | curl -fsS -m 3 -K - -H "X-Transmission-Session-Id: ${sid}" -d '{"method":"torrent-get","arguments":{"fields":["status"]}}' \
+                    "http://127.0.0.1:${port}/transmission/rpc" 2> /dev/null |
+                    jq -c --arg u "$u" '{client: "transmission", user: $u, active: ([.arguments.torrents[] | select(.status == 3 or .status == 4)] | length), total: (.arguments.torrents | length)}'
+            fi
+        fi
+    fi
+}
+
+# active torrents per client, every swizzin user at once to stay within the dashboard's timeout
+cmd_downloads() {
+    local u tmp
+    tmp=$(mktemp -d)
+    # shellcheck source=/dev/null
+    . /etc/swizzin/sources/functions/users
+    while read -r u; do
+        [[ $u =~ ^[a-z_][a-z0-9_.-]*$ ]] || continue
+        user_downloads "$u" > "${tmp}/${u}" &
+    done < <(_get_user_list)
+    wait
+    cat "$tmp"/* 2> /dev/null | jq -sc '.'
+    rm -rf "$tmp"
+}
+
+cmd_power() {
+    case ${1:-} in
+        reboot | poweroff) ;;
+        *) die "invalid power action" ;;
+    esac
+    # a few seconds so the dashboard can answer first
+    systemd-run --quiet --collect --on-active=5 /bin/systemctl "$1"
+    echo "scheduled"
+}
+
+cmd=${1:-}
+shift || true
+case $cmd in
+    service) cmd_service "$@" ;;
+    appinfo) cmd_appinfo "$@" ;;
+    scripts) cmd_scripts ;;
+    job) cmd_job "$@" ;;
+    smart) cmd_smart ;;
+    fail2ban) cmd_fail2ban ;;
+    quota) cmd_quota ;;
+    downloads) cmd_downloads ;;
+    power) cmd_power "$@" ;;
+    *) die "unknown command" ;;
+esac

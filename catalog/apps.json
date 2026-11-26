@@ -1,0 +1,960 @@
+{
+  "_comment": "One entry per swizzin install script. units: systemd units, a trailing @ is a per-user template. web: path on the main site. link: an app on its own port, fixed or read from its nginx site. paths: {user} is the swizzin master. interactive: the installer asks questions, only box on SSH can install it. version: how the root helper reads the installed version.",
+  "categories": [
+    "Download Clients",
+    "Media Management",
+    "Indexers",
+    "Media Servers",
+    "Media Requests",
+    "Usenet",
+    "File Management",
+    "Communication",
+    "Monitoring",
+    "Remote Access",
+    "Readers",
+    "Utilities"
+  ],
+  "apps": [
+    {
+      "id": "airsonic",
+      "name": "Airsonic",
+      "category": "Media Servers",
+      "desc": "Web-based music streaming server",
+      "units": ["airsonic"],
+      "web": "/airsonic/",
+      "paths": {
+        "install": "/opt/airsonic",
+        "data": "/var/lib/airsonic"
+      },
+      "version": {
+        "cmd": "ls /opt/airsonic",
+        "re": "airsonic-advanced-([0-9]+(?:\\.[0-9]+)*)"
+      }
+    },
+    {
+      "id": "autobrr",
+      "name": "autobrr",
+      "category": "Indexers",
+      "desc": "Watches IRC announce channels and sends releases to your clients",
+      "units": ["autobrr@"],
+      "web": "/autobrr/",
+      "paths": {
+        "config": "/home/{user}/.config/autobrr/config.toml",
+        "data": "/home/{user}/.config/autobrr",
+        "log": "/home/{user}/.config/autobrr/logs"
+      },
+      "version": {
+        "cmd": "/usr/local/bin/autobrr version",
+        "re": "Version: v?([0-9]+(?:\\.[0-9]+)*)"
+      }
+    },
+    {
+      "id": "bazarr",
+      "name": "Bazarr",
+      "category": "Media Management",
+      "desc": "Subtitle manager for Sonarr and Radarr",
+      "units": ["bazarr"],
+      "web": "/bazarr/",
+      "paths": {
+        "config": "/opt/bazarr/data/config/config.yaml",
+        "data": "/opt/bazarr/data",
+        "log": "/opt/bazarr/data/log/bazarr.log",
+        "install": "/opt/bazarr"
+      },
+      "apikey": {
+        "file": "/opt/bazarr/data/config/config.yaml",
+        "type": "yaml",
+        "key": "apikey"
+      },
+      "version": {
+        "file": "/opt/bazarr/VERSION"
+      }
+    },
+    {
+      "id": "btsync",
+      "name": "Resilio Sync",
+      "category": "File Management",
+      "desc": "Peer-to-peer file synchronisation",
+      "units": ["resilio-sync"],
+      "web": null,
+      "paths": {
+        "config": "/etc/resilio-sync/config.json"
+      },
+      "version": {
+        "dpkg": "resilio-sync"
+      },
+      "link": {
+        "scheme": "http",
+        "port": 8888,
+        "path": "/gui"
+      }
+    },
+    {
+      "id": "calibre",
+      "name": "Calibre",
+      "category": "Readers",
+      "desc": "Ebook library management tools",
+      "units": [],
+      "web": null,
+      "paths": {
+        "install": "/opt/calibre"
+      },
+      "version": {
+        "cmd": "/opt/calibre/calibre --version",
+        "re": "calibre ([0-9]+(?:\\.[0-9]+)*)"
+      }
+    },
+    {
+      "id": "calibrecs",
+      "name": "Calibre Content Server",
+      "category": "Readers",
+      "desc": "Serves your Calibre library over the web",
+      "units": ["calibrecs"],
+      "web": "/calibrecs/",
+      "paths": {}
+    },
+    {
+      "id": "calibreweb",
+      "name": "Calibre-Web",
+      "category": "Readers",
+      "desc": "Web reader and manager for a Calibre library",
+      "units": ["calibreweb"],
+      "web": "/calibreweb/",
+      "paths": {
+        "install": "/opt/calibreweb"
+      },
+      "interactive": true
+    },
+    {
+      "id": "deluge",
+      "name": "Deluge",
+      "category": "Download Clients",
+      "desc": "Lightweight BitTorrent client",
+      "units": ["deluged@", "deluge-web@"],
+      "web": "/deluge/",
+      "paths": {
+        "config": "/home/{user}/.config/deluge/core.conf",
+        "data": "/home/{user}/.config/deluge",
+        "log": "/home/{user}/.config/deluge/deluged.log"
+      },
+      "version": {
+        "cmd": "deluged --version",
+        "re": "deluged ([0-9]+(?:\\.[0-9]+)*)"
+      },
+      "interactive": true
+    },
+    {
+      "id": "duckdns",
+      "name": "DuckDNS",
+      "category": "Utilities",
+      "desc": "Keeps a free DuckDNS hostname pointed at the server",
+      "units": [],
+      "web": null,
+      "paths": {},
+      "interactive": true
+    },
+    {
+      "id": "emby",
+      "name": "Emby",
+      "category": "Media Servers",
+      "desc": "Media server for your movies, shows and music",
+      "units": ["emby-server"],
+      "web": "/emby/",
+      "paths": {
+        "data": "/var/lib/emby",
+        "log": "/var/lib/emby/logs",
+        "install": "/opt/emby-server"
+      },
+      "version": {
+        "dpkg": "emby-server"
+      },
+      "interactive": true
+    },
+    {
+      "id": "ffmpeg",
+      "name": "FFmpeg",
+      "category": "Utilities",
+      "desc": "Audio and video conversion tools",
+      "units": [],
+      "web": null,
+      "paths": {},
+      "version": {
+        "cmd": "ffmpeg -version",
+        "re": "ffmpeg version n?([0-9]+(?:\\.[0-9]+)*)"
+      }
+    },
+    {
+      "id": "filebrowser",
+      "name": "File Browser",
+      "category": "File Management",
+      "desc": "Web file manager for your home folder",
+      "units": ["filebrowser"],
+      "web": "/filebrowser/",
+      "paths": {
+        "data": "/home/{user}/.config/Filebrowser",
+        "install": "/home/{user}/bin/filebrowser"
+      },
+      "version": {
+        "cmd": "/home/{user}/bin/filebrowser version",
+        "re": "v([0-9]+(?:\\.[0-9]+)*)"
+      },
+      "interactive": true
+    },
+    {
+      "id": "flood",
+      "name": "Flood",
+      "category": "Download Clients",
+      "desc": "Modern web interface for rTorrent, qBittorrent and Transmission",
+      "units": ["flood@"],
+      "web": "/flood/",
+      "paths": {
+        "config": "/home/{user}/.config/flood/env",
+        "data": "/home/{user}/.config/flood"
+      },
+      "version": {
+        "cmd": "flood --version",
+        "re": "v?([0-9]+(?:\\.[0-9]+)*)"
+      }
+    },
+    {
+      "id": "homepage",
+      "name": "Homepage",
+      "category": "Monitoring",
+      "desc": "Start page with links and widgets for your apps",
+      "units": ["homepage"],
+      "web": null,
+      "paths": {
+        "config": "/home/{user}/.config/homepage",
+        "install": "/opt/homepage"
+      },
+      "version": {
+        "json": "/opt/homepage/package.json",
+        "key": "version"
+      },
+      "link": {
+        "scheme": "https",
+        "site": "homepage",
+        "path": "/"
+      }
+    },
+    {
+      "id": "jackett",
+      "name": "Jackett",
+      "category": "Indexers",
+      "desc": "Turns tracker searches into a Torznab API",
+      "units": ["jackett@"],
+      "web": "/jackett/",
+      "paths": {
+        "config": "/home/{user}/.config/Jackett/ServerConfig.json",
+        "data": "/home/{user}/.config/Jackett",
+        "install": "/home/{user}/Jackett"
+      },
+      "apikey": {
+        "file": "/home/{user}/.config/Jackett/ServerConfig.json",
+        "type": "json",
+        "key": "APIKey"
+      }
+    },
+    {
+      "id": "jellyfin",
+      "name": "Jellyfin",
+      "category": "Media Servers",
+      "desc": "Free media server for your movies, shows and music",
+      "units": ["jellyfin"],
+      "web": "/jellyfin/",
+      "paths": {
+        "config": "/etc/jellyfin",
+        "data": "/var/lib/jellyfin",
+        "log": "/var/log/jellyfin"
+      },
+      "version": {
+        "dpkg": "jellyfin-server"
+      },
+      "interactive": true
+    },
+    {
+      "id": "jfago",
+      "name": "jfa-go",
+      "category": "Media Requests",
+      "desc": "Invitations and user management for Jellyfin and Emby",
+      "units": ["jfago"],
+      "web": "/jfa-go/",
+      "paths": {},
+      "version": {
+        "dpkg": "jfa-go"
+      }
+    },
+    {
+      "id": "letsencrypt",
+      "name": "Let's Encrypt",
+      "category": "Utilities",
+      "desc": "Free TLS certificate for your domain",
+      "units": [],
+      "web": null,
+      "paths": {
+        "data": "/root/.acme.sh"
+      },
+      "interactive": true
+    },
+    {
+      "id": "librespeed",
+      "name": "LibreSpeed",
+      "category": "Monitoring",
+      "desc": "Speed test between your browser and the server",
+      "units": [],
+      "web": "/librespeed/",
+      "paths": {
+        "install": "/srv/librespeed"
+      }
+    },
+    {
+      "id": "lidarr",
+      "name": "Lidarr",
+      "category": "Media Management",
+      "desc": "Music collection manager for Usenet and BitTorrent",
+      "units": ["lidarr"],
+      "web": "/lidarr/",
+      "paths": {
+        "config": "/home/{user}/.config/Lidarr/config.xml",
+        "data": "/home/{user}/.config/Lidarr",
+        "log": "/home/{user}/.config/Lidarr/logs",
+        "install": "/opt/Lidarr"
+      },
+      "apikey": {
+        "file": "/home/{user}/.config/Lidarr/config.xml",
+        "type": "xml",
+        "key": "ApiKey"
+      },
+      "version": {
+        "arr": "/home/{user}/.config/Lidarr/config.xml",
+        "api": "v1"
+      }
+    },
+    {
+      "id": "lounge",
+      "name": "The Lounge",
+      "category": "Communication",
+      "desc": "Always-on web IRC client",
+      "units": ["lounge"],
+      "web": "/irc/",
+      "paths": {
+        "config": "/opt/lounge/config.js",
+        "data": "/opt/lounge"
+      },
+      "version": {
+        "cmd": "thelounge --version",
+        "re": "v?([0-9]+(?:\\.[0-9]+)*)"
+      }
+    },
+    {
+      "id": "medusa",
+      "name": "Medusa",
+      "category": "Media Management",
+      "desc": "TV show manager",
+      "units": ["medusa"],
+      "web": "/medusa/",
+      "paths": {
+        "data": "/opt/medusa",
+        "install": "/opt/medusa"
+      },
+      "version": {
+        "git": "/opt/medusa"
+      },
+      "interactive": true
+    },
+    {
+      "id": "mylar",
+      "name": "Mylar",
+      "category": "Media Management",
+      "desc": "Comic book downloader",
+      "units": ["mylar"],
+      "web": "/mylar/",
+      "paths": {
+        "data": "/home/{user}/.config/mylar",
+        "install": "/opt/mylar"
+      },
+      "version": {
+        "git": "/opt/mylar"
+      }
+    },
+    {
+      "id": "navidrome",
+      "name": "Navidrome",
+      "category": "Media Servers",
+      "desc": "Music server compatible with Subsonic apps",
+      "units": ["navidrome"],
+      "web": "/navidrome/",
+      "paths": {
+        "install": "/opt/navidrome"
+      },
+      "version": {
+        "cmd": "/opt/navidrome/navidrome --version",
+        "re": "([0-9]+(?:\\.[0-9]+)*)"
+      }
+    },
+    {
+      "id": "netdata",
+      "name": "Netdata",
+      "category": "Monitoring",
+      "desc": "Real-time performance monitoring",
+      "units": ["netdata"],
+      "web": "/netdata/",
+      "paths": {
+        "config": "/etc/netdata"
+      },
+      "version": {
+        "cmd": "netdata -v",
+        "re": "v([0-9]+(?:\\.[0-9]+)*)"
+      }
+    },
+    {
+      "id": "netronome",
+      "name": "Netronome",
+      "category": "Monitoring",
+      "desc": "Network speed tests and monitoring",
+      "units": ["netronome@"],
+      "web": "/netronome/",
+      "paths": {
+        "data": "/home/{user}/.config/netronome"
+      }
+    },
+    {
+      "id": "nextcloud",
+      "name": "Nextcloud",
+      "category": "File Management",
+      "desc": "Self-hosted file sync and collaboration",
+      "units": [],
+      "web": "/nextcloud/",
+      "paths": {
+        "install": "/srv/nextcloud"
+      },
+      "interactive": true,
+      "removeInteractive": true
+    },
+    {
+      "id": "nginx",
+      "name": "nginx",
+      "category": "Utilities",
+      "desc": "Web server in front of every app",
+      "units": ["nginx"],
+      "web": null,
+      "core": true,
+      "paths": {
+        "config": "/etc/nginx",
+        "log": "/var/log/nginx"
+      },
+      "version": {
+        "dpkg": "nginx"
+      },
+      "interactive": true
+    },
+    {
+      "id": "nzbget",
+      "name": "NZBGet",
+      "category": "Usenet",
+      "desc": "Efficient Usenet downloader",
+      "units": ["nzbget@"],
+      "web": "/nzbget/",
+      "paths": {
+        "config": "/home/{user}/nzbget/nzbget.conf",
+        "install": "/home/{user}/nzbget"
+      }
+    },
+    {
+      "id": "nzbhydra",
+      "name": "NZBHydra 2",
+      "category": "Indexers",
+      "desc": "Meta search across Usenet indexers and trackers",
+      "units": ["nzbhydra"],
+      "web": "/nzbhydra/",
+      "paths": {
+        "config": "/home/{user}/.config/nzbhydra2/nzbhydra.yml",
+        "data": "/home/{user}/.config/nzbhydra2",
+        "log": "/home/{user}/.config/nzbhydra2/logs",
+        "install": "/opt/nzbhydra2"
+      },
+      "apikey": {
+        "file": "/home/{user}/.config/nzbhydra2/nzbhydra.yml",
+        "type": "yaml",
+        "key": "apiKey"
+      },
+      "version": {
+        "cmd": "grep -m1 '^### v' /opt/nzbhydra2/changelog.md",
+        "re": "v([0-9]+(?:\\.[0-9]+)*)"
+      }
+    },
+    {
+      "id": "ombi",
+      "name": "Ombi",
+      "category": "Media Requests",
+      "desc": "Lets your users request movies and shows",
+      "units": ["ombi"],
+      "web": "/ombi/",
+      "paths": {
+        "data": "/etc/Ombi",
+        "install": "/opt/Ombi"
+      },
+      "version": {
+        "dpkg": "ombi"
+      },
+      "removeInteractive": true
+    },
+    {
+      "id": "organizr",
+      "name": "Organizr",
+      "category": "Utilities",
+      "desc": "Tabbed homepage for your services",
+      "units": [],
+      "web": "/organizr/",
+      "paths": {
+        "install": "/srv/organizr"
+      }
+    },
+    {
+      "id": "panel",
+      "name": "swizzin panel",
+      "category": "Monitoring",
+      "desc": "The original swizzin web dashboard",
+      "units": ["panel"],
+      "web": "/",
+      "paths": {
+        "config": "/opt/swizzin/swizzin.cfg",
+        "install": "/opt/swizzin"
+      },
+      "version": {
+        "git": "/opt/swizzin"
+      }
+    },
+    {
+      "id": "plex",
+      "name": "Plex",
+      "category": "Media Servers",
+      "desc": "Media server with apps for every device",
+      "units": ["plexmediaserver"],
+      "web": null,
+      "paths": {
+        "data": "/var/lib/plexmediaserver/Library/Application Support/Plex Media Server"
+      },
+      "version": {
+        "dpkg": "plexmediaserver"
+      },
+      "interactive": true,
+      "link": {
+        "scheme": "http",
+        "port": 32400,
+        "path": "/web"
+      }
+    },
+    {
+      "id": "prowlarr",
+      "name": "Prowlarr",
+      "category": "Indexers",
+      "desc": "Indexer manager for the *arr apps",
+      "units": ["prowlarr"],
+      "web": "/prowlarr/",
+      "paths": {
+        "config": "/home/{user}/.config/Prowlarr/config.xml",
+        "data": "/home/{user}/.config/Prowlarr",
+        "log": "/home/{user}/.config/Prowlarr/logs",
+        "install": "/opt/Prowlarr"
+      },
+      "apikey": {
+        "file": "/home/{user}/.config/Prowlarr/config.xml",
+        "type": "xml",
+        "key": "ApiKey"
+      },
+      "version": {
+        "arr": "/home/{user}/.config/Prowlarr/config.xml",
+        "api": "v1"
+      },
+      "removeInteractive": true
+    },
+    {
+      "id": "qbittorrent",
+      "name": "qBittorrent",
+      "category": "Download Clients",
+      "desc": "Full-featured BitTorrent client",
+      "units": ["qbittorrent@"],
+      "web": "/qbittorrent/",
+      "paths": {
+        "config": "/home/{user}/.config/qBittorrent/qBittorrent.conf",
+        "data": "/home/{user}/.local/share/qBittorrent",
+        "log": "/home/{user}/.local/share/qBittorrent/logs"
+      },
+      "version": {
+        "cmd": "qbittorrent-nox --version",
+        "re": "v([0-9]+(?:\\.[0-9]+)*)"
+      },
+      "interactive": true
+    },
+    {
+      "id": "quassel",
+      "name": "Quassel",
+      "category": "Communication",
+      "desc": "Distributed IRC client core",
+      "units": ["quasselcore"],
+      "web": null,
+      "paths": {
+        "data": "/var/lib/quassel"
+      },
+      "version": {
+        "dpkg": "quassel-core"
+      }
+    },
+    {
+      "id": "qui",
+      "name": "qui",
+      "category": "Download Clients",
+      "desc": "Fast web interface for several qBittorrent instances",
+      "units": ["qui@"],
+      "web": "/qui/",
+      "paths": {
+        "data": "/home/{user}/.config/qui"
+      },
+      "version": {
+        "cmd": "/usr/local/bin/qui version",
+        "re": "v?([0-9]+(?:\\.[0-9]+)*)"
+      }
+    },
+    {
+      "id": "quota",
+      "name": "Quota",
+      "category": "Utilities",
+      "desc": "Disk quotas per user",
+      "units": [],
+      "web": null,
+      "core": true,
+      "paths": {},
+      "interactive": true
+    },
+    {
+      "id": "radarr",
+      "name": "Radarr",
+      "category": "Media Management",
+      "desc": "Movie collection manager for Usenet and BitTorrent",
+      "units": ["radarr"],
+      "web": "/radarr/",
+      "paths": {
+        "config": "/home/{user}/.config/Radarr/config.xml",
+        "data": "/home/{user}/.config/Radarr",
+        "log": "/home/{user}/.config/Radarr/logs",
+        "install": "/opt/Radarr"
+      },
+      "apikey": {
+        "file": "/home/{user}/.config/Radarr/config.xml",
+        "type": "xml",
+        "key": "ApiKey"
+      },
+      "version": {
+        "arr": "/home/{user}/.config/Radarr/config.xml",
+        "api": "v3"
+      }
+    },
+    {
+      "id": "rapidleech",
+      "name": "Rapidleech",
+      "category": "File Management",
+      "desc": "Downloads from file hosting sites",
+      "units": [],
+      "web": "/rapidleech/",
+      "paths": {
+        "install": "/srv/rapidleech"
+      }
+    },
+    {
+      "id": "rclone",
+      "name": "rclone",
+      "category": "File Management",
+      "desc": "Syncs and mounts cloud storage",
+      "units": ["rclone@"],
+      "web": null,
+      "paths": {
+        "config": "/home/{user}/.config/rclone/rclone.conf"
+      },
+      "version": {
+        "cmd": "rclone version",
+        "re": "rclone v([0-9]+(?:\\.[0-9]+)*)"
+      }
+    },
+    {
+      "id": "rtorrent",
+      "name": "rTorrent",
+      "category": "Download Clients",
+      "desc": "Fast command line BitTorrent client",
+      "units": ["rtorrent@"],
+      "web": null,
+      "paths": {
+        "config": "/home/{user}/.rtorrent.rc",
+        "data": "/home/{user}/.sessions"
+      },
+      "version": {
+        "cmd": "rtorrent -h",
+        "re": "version ([0-9]+(?:\\.[0-9]+)*)"
+      },
+      "interactive": true,
+      "removeInteractive": true
+    },
+    {
+      "id": "rutorrent",
+      "name": "ruTorrent",
+      "category": "Download Clients",
+      "desc": "Web interface for rTorrent",
+      "units": [],
+      "web": "/rutorrent/",
+      "paths": {
+        "config": "/srv/rutorrent/conf/config.php",
+        "install": "/srv/rutorrent"
+      },
+      "version": {
+        "git": "/srv/rutorrent"
+      }
+    },
+    {
+      "id": "sabnzbd",
+      "name": "SABnzbd",
+      "category": "Usenet",
+      "desc": "Usenet downloader that runs on its own",
+      "units": ["sabnzbd"],
+      "web": "/sabnzbd/",
+      "paths": {
+        "config": "/home/{user}/.config/sabnzbd/sabnzbd.ini",
+        "data": "/home/{user}/.config/sabnzbd",
+        "install": "/opt/sabnzbd"
+      },
+      "apikey": {
+        "file": "/home/{user}/.config/sabnzbd/sabnzbd.ini",
+        "type": "ini",
+        "key": "api_key"
+      },
+      "version": {
+        "git": "/opt/sabnzbd"
+      }
+    },
+    {
+      "id": "shellinabox",
+      "name": "Shell In A Box",
+      "category": "Remote Access",
+      "desc": "SSH terminal in the browser",
+      "units": ["shellinabox"],
+      "web": "/shell/",
+      "paths": {},
+      "version": {
+        "dpkg": "shellinabox"
+      }
+    },
+    {
+      "id": "shinkro",
+      "name": "shinkro",
+      "category": "Media Management",
+      "desc": "Syncs Plex watch status with MyAnimeList",
+      "units": ["shinkro@"],
+      "web": "/shinkro/",
+      "paths": {
+        "data": "/home/{user}/.config/shinkro"
+      }
+    },
+    {
+      "id": "sickchill",
+      "name": "SickChill",
+      "category": "Media Management",
+      "desc": "TV show manager",
+      "units": ["sickchill"],
+      "web": "/sickchill/",
+      "paths": {
+        "install": "/opt/sickchill"
+      },
+      "interactive": true
+    },
+    {
+      "id": "sickgear",
+      "name": "SickGear",
+      "category": "Media Management",
+      "desc": "TV show manager",
+      "units": ["sickgear"],
+      "web": "/sickgear/",
+      "paths": {
+        "install": "/opt/sickgear"
+      },
+      "version": {
+        "git": "/opt/sickgear"
+      },
+      "interactive": true
+    },
+    {
+      "id": "sonarr",
+      "name": "Sonarr",
+      "category": "Media Management",
+      "desc": "TV show manager for Usenet and BitTorrent",
+      "units": ["sonarr"],
+      "web": "/sonarr/",
+      "paths": {
+        "config": "/home/{user}/.config/Sonarr/config.xml",
+        "data": "/home/{user}/.config/Sonarr",
+        "log": "/home/{user}/.config/Sonarr/logs",
+        "install": "/opt/Sonarr"
+      },
+      "apikey": {
+        "file": "/home/{user}/.config/Sonarr/config.xml",
+        "type": "xml",
+        "key": "ApiKey"
+      },
+      "version": {
+        "arr": "/home/{user}/.config/Sonarr/config.xml",
+        "api": "v3"
+      },
+      "removeInteractive": true
+    },
+    {
+      "id": "swizdash",
+      "name": "swizdash",
+      "category": "Monitoring",
+      "desc": "This dashboard",
+      "units": ["swizdash"],
+      "web": null,
+      "core": true,
+      "paths": {
+        "data": "/var/lib/swizdash",
+        "install": "/opt/swizdash"
+      },
+      "version": {
+        "json": "/opt/swizdash/package.json",
+        "key": "version"
+      },
+      "link": {
+        "scheme": "https",
+        "site": "swizdash",
+        "path": "/"
+      }
+    },
+    {
+      "id": "syncthing",
+      "name": "Syncthing",
+      "category": "File Management",
+      "desc": "Continuous peer-to-peer file sync",
+      "units": ["syncthing@"],
+      "web": "/syncthing/",
+      "paths": {
+        "data": "/home/{user}/.config/syncthing"
+      },
+      "version": {
+        "cmd": "syncthing --version",
+        "re": "v([0-9]+(?:\\.[0-9]+)*)"
+      }
+    },
+    {
+      "id": "tautulli",
+      "name": "Tautulli",
+      "category": "Monitoring",
+      "desc": "Statistics and history for Plex",
+      "units": ["tautulli"],
+      "web": "/plexpy/",
+      "paths": {
+        "config": "/opt/tautulli/config.ini",
+        "data": "/opt/tautulli",
+        "install": "/opt/tautulli"
+      },
+      "apikey": {
+        "file": "/opt/tautulli/config.ini",
+        "type": "ini",
+        "key": "api_key"
+      },
+      "version": {
+        "git": "/opt/tautulli"
+      }
+    },
+    {
+      "id": "transmission",
+      "name": "Transmission",
+      "category": "Download Clients",
+      "desc": "Simple and light BitTorrent client",
+      "units": ["transmission@"],
+      "web": "/transmission/web/",
+      "paths": {
+        "config": "/home/{user}/.config/transmission-daemon/settings.json",
+        "data": "/home/{user}/.config/transmission-daemon",
+        "log": "/home/{user}/.config/transmission-daemon/transmission.log"
+      },
+      "version": {
+        "cmd": "transmission-daemon -V",
+        "re": "transmission-daemon ([0-9]+(?:\\.[0-9]+)*)"
+      }
+    },
+    {
+      "id": "vsftpd",
+      "name": "vsftpd",
+      "category": "File Management",
+      "desc": "FTP server over TLS",
+      "units": ["vsftpd"],
+      "web": null,
+      "paths": {
+        "config": "/etc/vsftpd.conf"
+      },
+      "version": {
+        "dpkg": "vsftpd"
+      }
+    },
+    {
+      "id": "webmin",
+      "name": "Webmin",
+      "category": "Remote Access",
+      "desc": "Web administration of the server",
+      "units": ["webmin"],
+      "web": "/webmin/",
+      "paths": {
+        "config": "/etc/webmin"
+      },
+      "version": {
+        "dpkg": "webmin"
+      }
+    },
+    {
+      "id": "wireguard",
+      "name": "WireGuard",
+      "category": "Remote Access",
+      "desc": "Fast and modern VPN",
+      "units": [],
+      "web": null,
+      "paths": {
+        "config": "/etc/wireguard"
+      },
+      "interactive": true
+    },
+    {
+      "id": "x2go",
+      "name": "X2Go",
+      "category": "Remote Access",
+      "desc": "Remote desktop over SSH",
+      "units": ["x2goserver"],
+      "web": null,
+      "paths": {},
+      "version": {
+        "dpkg": "x2goserver"
+      }
+    },
+    {
+      "id": "xmrig",
+      "name": "XMRig",
+      "category": "Utilities",
+      "desc": "Monero miner",
+      "units": ["xmrig"],
+      "web": null,
+      "paths": {},
+      "interactive": true
+    },
+    {
+      "id": "znc",
+      "name": "ZNC",
+      "category": "Communication",
+      "desc": "IRC bouncer",
+      "units": ["znc"],
+      "web": null,
+      "paths": {
+        "data": "/home/znc/.znc"
+      },
+      "version": {
+        "cmd": "znc --version",
+        "re": "ZNC ([0-9]+(?:\\.[0-9]+)*)"
+      }
+    }
+  ]
+}

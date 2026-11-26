@@ -1,0 +1,17 @@
+{
+  "name": "swizdash",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A dashboard for swizzin seedboxes",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "npm --prefix web run build",
+    "check": "npm --prefix web run check:server && npm --prefix web run check",
+    "format": "npm --prefix web run format",
+    "package": "node scripts/package.mjs"
+  }
+}
