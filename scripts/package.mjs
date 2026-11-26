@@ -21,7 +21,7 @@ cpSync(join(dist, 'public'), join(stage, 'public'), { recursive: true })
 cpSync(join(root, 'server', 'src'), join(stage, 'server'), { recursive: true })
 cpSync(join(root, 'catalog'), join(stage, 'catalog'), { recursive: true })
 cpSync(join(root, 'helper'), join(stage, 'helper'), { recursive: true })
-for (const f of ['LICENSE', 'README.md']) if (existsSync(join(root, f))) cpSync(join(root, f), join(stage, f))
+for (const f of ['LICENSE', 'README.md', 'CHANGELOG.md']) if (existsSync(join(root, f))) cpSync(join(root, f), join(stage, f))
 writeFileSync(join(stage, 'package.json'), `${JSON.stringify({ name: pkg.name, version: pkg.version, type: 'module', private: true }, null, 2)}\n`)
 
 execFileSync('tar', ['-czf', 'swizdash.tar.gz', '--owner=0', '--group=0', 'swizdash'], { cwd: dist, stdio: 'inherit' })
