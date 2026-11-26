@@ -147,6 +147,20 @@ export interface Updates {
   packages: { name: string; origin: string; version: string; from: string; security: boolean }[]
 }
 
+export interface SoftwareUpdate {
+  name: 'swizzin' | 'swizdash'
+  /** null: the installed version could not be read */
+  installed: string | null
+  /** null: the check failed (offline, rate limit) */
+  available: string | null
+  /** the branch box update follows, swizzin only */
+  branch: string | null
+  /** manual: box update leaves /etc/swizzin alone (a link, or .dev.lock) */
+  state: 'current' | 'update' | 'manual' | 'unknown'
+  checkedAt: number | null
+  command: string
+}
+
 export interface Sensor {
   chip: string
   label: string
@@ -180,6 +194,15 @@ export interface Hardware {
   }
   sensors: Sensor[]
   raid: { available: boolean; arrays: RaidArray[] }
+  /** null fields: the machine does not report it */
+  health: {
+    /** reason: switched off on purpose (SMT off, maxcpus= boot option), not a fault */
+    cpus: { online: number; present: number; offline: number[]; reason: 'smt' | 'maxcpus' | null } | null
+    /** events since boot */
+    throttle: { core: number; package: number; throttledCores: number } | null
+    microcode: string[]
+    ecc: { controllers: number; corrected: number; uncorrected: number } | null
+  }
 }
 
 export interface Smart {

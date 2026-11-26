@@ -9,9 +9,9 @@ export interface RunResult {
 }
 
 /** Runs a program without a shell. Never throws. */
-export function run(file: string, args: string[], timeoutMs = 10_000): Promise<RunResult> {
+export function run(file: string, args: string[], timeoutMs = 10_000, env: Record<string, string> = {}): Promise<RunResult> {
   return new Promise((resolve) => {
-    execFile(file, args, { timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, LC_ALL: 'C' } }, (err, stdout, stderr) => {
+    execFile(file, args, { timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, LC_ALL: 'C', ...env } }, (err, stdout, stderr) => {
       const code = err ? (typeof err.code === 'number' ? err.code : 1) : 0
       resolve({ ok: !err, code, stdout: String(stdout), stderr: String(stderr) })
     })
@@ -34,17 +34,20 @@ export async function readText(path: string): Promise<string | null> {
 /**
  * Caches an async value for ttlMs after it arrives. Callers share the computation in
  * progress, so a slow one (the root helper) never runs twice at the same time.
+ * ttlMs can depend on the value, to keep a failed check for less time than a good one.
  */
-export function cached<T>(ttlMs: number, fn: () => Promise<T>): () => Promise<T> {
+export function cached<T>(ttlMs: number | ((v: T) => number), fn: () => Promise<T>): () => Promise<T> {
   let at = 0
+  let life = 0
   let value: Promise<T> | null = null
   let running = false
   return () => {
-    if (!value || (!running && Date.now() - at > ttlMs)) {
+    if (!value || (!running && Date.now() - at > life)) {
       running = true
       value = fn().then(
         (v) => {
           at = Date.now()
+          life = typeof ttlMs === 'number' ? ttlMs : ttlMs(v)
           running = false
           return v
         },
@@ -61,7 +64,10 @@ export function cached<T>(ttlMs: number, fn: () => Promise<T>): () => Promise<T>
 }
 
 /** One cache per key; `forget(key)` drops a value that is known to be stale. */
-export function keyed<T>(ttlMs: number, fn: (key: string) => Promise<T>): ((key: string) => Promise<T>) & { forget: (key: string) => void } {
+export function keyed<T>(
+  ttlMs: number | ((v: T) => number),
+  fn: (key: string) => Promise<T>,
+): ((key: string) => Promise<T>) & { forget: (key: string) => void } {
   const map = new Map<string, () => Promise<T>>()
   const get = (key: string) => {
     let f = map.get(key)

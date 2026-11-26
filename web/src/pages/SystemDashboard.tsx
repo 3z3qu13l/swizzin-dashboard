@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowDownUp, ClipboardCopy, Cpu, Database, HardDrive, MemoryStick, Package, Power, RefreshCw, Server } from 'lucide-react'
 import { get, post, serverTime, type Meta } from '@/lib/api'
-import { useBandwidth, useLive, useMeta, useSummary, useUpdates } from '@/lib/queries'
+import { useBandwidth, useLive, useMeta, useSoftwareUpdates, useSummary, useUpdates } from '@/lib/queries'
 import { ago, bytes, cn, duration, pct, rate } from '@/lib/format'
 import { useNow } from '@/lib/hooks'
 import { Badge, Bar, Button, Card, CardHead, Dialog, Empty, ErrorNote, Menu, MenuItem, Spinner } from '@/components/ui'
@@ -141,6 +141,64 @@ function Details() {
   )
 }
 
+function SubHead({ title, checked }: { title: string; checked?: string }) {
+  return (
+    <div className="flex flex-wrap justify-between gap-x-3 text-xs text-muted">
+      <h3 className="font-semibold">{title}</h3>
+      {checked && <p>{checked}</p>}
+    </div>
+  )
+}
+
+/** swizzin and swizdash against their remotes, apart from the apt list: a remote can be slow or out of reach */
+function Software() {
+  const q = useSoftwareUpdates()
+  const checked = q.data?.map((s) => s.checkedAt).filter((t): t is number => t != null)
+  return (
+    <div className="px-5 pb-3">
+      <SubHead title="swizzin and swizdash" checked={checked?.length ? `Checked ${ago(serverTime(Math.min(...checked)))}` : undefined} />
+      {q.isPending ? (
+        <p className="py-2 text-sm text-muted">Checking…</p>
+      ) : q.error ? (
+        <p className="py-2 text-sm text-muted">Could not check.</p>
+      ) : (
+        <ul>
+          {q.data.map((s) => (
+            <li key={s.name} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line py-2 text-sm first:border-t-0">
+              <span className="flex-1 font-medium">{s.name}</span>
+              <span className="text-xs text-muted">
+                installed <span className="font-mono text-text">{s.installed ?? 'unknown'}</span>
+              </span>
+              {s.installed == null ? (
+                <Badge>could not read the installed version</Badge>
+              ) : s.state === 'update' ? (
+                <Badge tone="blue">{s.branch ? `newer commit on ${s.branch}` : `${s.available} available`}</Badge>
+              ) : s.state === 'current' ? (
+                <Badge tone="green">up to date</Badge>
+              ) : s.state === 'manual' ? (
+                <Badge>managed manually</Badge>
+              ) : (
+                <Badge>could not check</Badge>
+              )}
+              {s.state === 'manual' && (
+                <p className="w-full text-xs text-muted">
+                  <code className="font-mono text-text">box update</code> leaves /etc/swizzin as it is: it is a link, or has a .dev.lock file.
+                </p>
+              )}
+              {s.state === 'update' && (
+                <p className="w-full text-xs text-muted">
+                  Update it over SSH with <code className="font-mono text-text">{s.command}</code>.
+                  {s.name === 'swizdash' && ' box installs the release swizzin has checked, which can come a little after the release itself.'}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function Updates() {
   const q = useUpdates()
   const pkgs = q.data?.packages ?? []
@@ -150,7 +208,7 @@ function Updates() {
       <CardHead
         icon={<Package className="size-4" />}
         title="System updates"
-        hint={q.data ? `Checked ${ago(serverTime(q.data.checkedAt))}` : ' '}
+        hint="swizzin, swizdash and the system packages"
         right={
           pkgs.length > 0 ? (
             <Badge tone={security ? 'amber' : 'blue'}>
@@ -159,12 +217,16 @@ function Updates() {
           ) : null
         }
       />
+      <Software />
+      <div className="border-t border-line px-5 pt-3">
+        <SubHead title="System packages" checked={q.data ? `Checked ${ago(serverTime(q.data.checkedAt))}` : undefined} />
+      </div>
       {q.isPending ? (
         <Spinner />
       ) : q.error ? (
         <ErrorNote error={q.error} />
       ) : pkgs.length === 0 ? (
-        <Empty title="Everything is up to date" />
+        <Empty title="Every system package is up to date" />
       ) : (
         <>
           <ul className="max-h-72 overflow-auto px-5">

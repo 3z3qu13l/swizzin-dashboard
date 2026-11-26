@@ -126,3 +126,91 @@ export function jobResult(log: string, kind: string): { state: 'success' | 'fail
   const locked = end[2] === '1'
   return { state: exitCode === 0 && (kind === 'install' ? locked : !locked) ? 'success' : 'failed', exitCode }
 }
+
+/** `git ls-remote <url> <ref>`: the commit of that ref, null when the answer has none */
+export function parseLsRemote(text: string, ref: string): string | null {
+  for (const l of text.split('\n')) {
+    const [hash, name] = l.trim().split(/\s+/)
+    if (name === ref && /^[0-9a-f]{40,64}$/.test(hash)) return hash
+  }
+  return null
+}
+
+/**
+ * -1, 0 or 1 for two versions like `0.1.2`, `v0.1.10` or `0.2.0-rc1` (a pre-release comes before
+ * its release), null when one is not a version
+ */
+export function compareVersions(a: string, b: string): number | null {
+  const parse = (v: string) => {
+    const m = /^v?(\d+(?:\.\d+)*)(?:-([\w.]+))?$/.exec(v.trim())
+    return m ? { n: m[1].split('.').map(Number), pre: m[2] ?? null } : null
+  }
+  const x = parse(a)
+  const y = parse(b)
+  if (!x || !y) return null
+  for (let i = 0; i < Math.max(x.n.length, y.n.length); i++) {
+    const d = (x.n[i] ?? 0) - (y.n[i] ?? 0)
+    if (d) return Math.sign(d)
+  }
+  if (x.pre === y.pre) return 0
+  if (!x.pre) return 1
+  if (!y.pre) return -1
+  return Math.sign(x.pre.localeCompare(y.pre, 'en', { numeric: true }))
+}
+
+/** a kernel CPU list like `0-3,6,8-9` (`/sys/devices/system/cpu/online`) */
+export function parseCpuList(text: string): number[] {
+  const out: number[] = []
+  for (const part of text.trim().split(',')) {
+    const m = /^(\d+)(?:-(\d+))?$/.exec(part.trim())
+    if (!m) continue
+    for (let i = Number(m[1]); i <= Number(m[2] ?? m[1]); i++) out.push(i)
+  }
+  return out
+}
+
+/**
+ * The `microcode` lines of `/proc/cpuinfo`, one entry per distinct value: CPUs that disagree
+ * point to a partial update. In a virtual machine (the `hypervisor` flag) the value is made up
+ * by the hypervisor (0xffffffff on VMware, often 0x1 on KVM) and the host loads the real one.
+ */
+export function parseMicrocode(cpuinfo: string): string[] {
+  if (/^flags\s*:.*\bhypervisor\b/m.test(cpuinfo)) return []
+  const values = new Set<string>()
+  for (const m of cpuinfo.matchAll(/^microcode\s*:\s*(\S+)/gm)) values.add(m[1].toLowerCase())
+  return [...values]
+}
+
+/**
+ * CPUs present but not online, and why. Siblings switched off with SMT (nosmt, or
+ * /sys/devices/system/cpu/smt/control) and CPUs left down by the maxcpus= boot option are a
+ * choice, not a fault: reason says so. (`notsupported` means the CPU has no SMT, so no sibling.)
+ */
+export function offlineCpus(present: number[], online: number[], smtControl: string, cmdline: string): { offline: number[]; reason: 'smt' | 'maxcpus' | null } {
+  const offline = present.filter((n) => !online.includes(n))
+  const reason = !offline.length ? null : /^(off|forceoff)$/.test(smtControl.trim()) ? 'smt' : /(^|\s)maxcpus=\d+/.test(cmdline) ? 'maxcpus' : null
+  return { offline, reason }
+}
+
+export interface ThrottleCpu {
+  package: number
+  core: number
+  coreCount: number | null
+  packageCount: number | null
+}
+
+/**
+ * Thermal throttling events since boot, from each CPU's `thermal_throttle` folder. Threads of
+ * one core share a counter, and so do the cores of one package: each is counted once.
+ */
+export function throttleTotals(cpus: ThrottleCpu[]): { core: number; package: number; throttledCores: number } | null {
+  if (!cpus.some((c) => c.coreCount != null || c.packageCount != null)) return null
+  const cores = new Map<string, number>()
+  const packages = new Map<number, number>()
+  for (const c of cpus) {
+    if (c.coreCount != null) cores.set(`${c.package}-${c.core}`, c.coreCount)
+    if (c.packageCount != null) packages.set(c.package, c.packageCount)
+  }
+  const sum = (m: Map<unknown, number>) => [...m.values()].reduce((a, b) => a + b, 0)
+  return { core: sum(cores), package: sum(packages), throttledCores: [...cores.values()].filter((n) => n > 0).length }
+}

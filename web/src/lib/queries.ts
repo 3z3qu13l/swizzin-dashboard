@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { get } from './api'
-import type { AppRow, Bandwidth, Download, Fail2ban, Hardware, HistoryPoint, Job, Live, Meta, Quota, Smart, Summary, Updates } from './api'
+import type { AppRow, Bandwidth, Download, Fail2ban, Hardware, HistoryPoint, Job, Live, Meta, Quota, Smart, SoftwareUpdate, Summary, Updates } from './api'
 
 export const useMeta = () => useQuery({ queryKey: ['meta'], queryFn: () => get<Meta>('/api/meta'), staleTime: Infinity })
 export const useSummary = () => useQuery({ queryKey: ['summary'], queryFn: () => get<Summary>('/api/summary'), refetchInterval: 15_000 })
 export const useApps = () => useQuery({ queryKey: ['apps'], queryFn: () => get<{ apps: AppRow[]; users: string[] }>('/api/apps'), refetchInterval: 8_000 })
 export const useBandwidth = () => useQuery({ queryKey: ['bandwidth'], queryFn: () => get<Bandwidth>('/api/bandwidth'), refetchInterval: 60_000 })
 export const useUpdates = () => useQuery({ queryKey: ['updates'], queryFn: () => get<Updates>('/api/updates'), staleTime: 5 * 60_000 })
+// the server asks GitHub at most every few hours
+export const useSoftwareUpdates = () =>
+  useQuery({ queryKey: ['updates', 'software'], queryFn: () => get<SoftwareUpdate[]>('/api/updates/software'), staleTime: 5 * 60_000 })
 export const useHardware = () => useQuery({ queryKey: ['hardware'], queryFn: () => get<Hardware>('/api/system/hardware'), refetchInterval: 30_000 })
 export const useSmart = () => useQuery({ queryKey: ['smart'], queryFn: () => get<Smart>('/api/system/smart'), staleTime: 5 * 60_000 })
 export const useFail2ban = () => useQuery({ queryKey: ['fail2ban'], queryFn: () => get<Fail2ban>('/api/system/fail2ban'), refetchInterval: 60_000 })
