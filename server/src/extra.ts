@@ -2,8 +2,8 @@ import { open, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { config } from './config.ts'
 import { defaultIface } from './system.ts'
-import { cached, readText, run } from './util.ts'
-import { jobResult, parseAptList, parseMdstat } from './parse.ts'
+import { cached, keyed, readText, run } from './util.ts'
+import { compareVersions, jobResult, parseAptList, parseCpuList, parseLsRemote, parseMdstat, parseMicrocode, throttleTotals } from './parse.ts'
 
 // ---------- bandwidth (vnStat) ----------
 
@@ -45,6 +45,89 @@ export const updates = cached(30 * 60_000, async () => {
   return { checkedAt: Date.now(), packages: parseAptList(r.stdout) }
 })
 
+// ---------- swizzin and swizdash ----------
+
+const swizzinDir = '/etc/swizzin'
+// GitHub allows 60 unauthenticated API calls an hour per address: a few hours is fresh enough
+const remoteTtl = 3 * 3600_000
+const swizdashRepo = '3z3qu13l/swizzin-dashboard'
+
+export interface SoftwareUpdate {
+  name: 'swizzin' | 'swizdash'
+  installed: string | null
+  /** null: the check failed (offline, rate limit) */
+  available: string | null
+  state: 'current' | 'update' | 'unknown'
+  checkedAt: number | null
+  command: string
+}
+
+const swizzinGit = (args: string[]) => run('git', ['-c', 'safe.directory=*', '-C', swizzinDir, ...args])
+
+// key: "<url> <ref>". A failure is not cached, the next visit tries again.
+const remoteHead = keyed(remoteTtl, async (key) => {
+  const [url, ref] = key.split(' ')
+  // a remote that asks for a password fails at once instead of waiting for the timeout
+  const r = await run('git', ['ls-remote', '--', url, ref], 20_000, { GIT_TERMINAL_PROMPT: '0' })
+  const hash = r.ok ? parseLsRemote(r.stdout, ref) : null
+  if (!hash) throw new Error(`git ls-remote ${url} failed`)
+  return { hash, at: Date.now() }
+})
+
+const latestRelease = cached(remoteTtl, async () => {
+  const res = await fetch(`https://api.github.com/repos/${swizdashRepo}/releases/latest`, {
+    headers: { accept: 'application/vnd.github+json', 'user-agent': 'swizdash' },
+    signal: AbortSignal.timeout(20_000),
+  })
+  if (!res.ok) throw new Error(`GitHub answered ${res.status}`)
+  const tag = ((await res.json()) as { tag_name?: unknown }).tag_name
+  if (typeof tag !== 'string') throw new Error('No release tag')
+  return { version: tag.replace(/^v/, ''), at: Date.now() }
+})
+
+/** /etc/swizzin against the branch `box update` resets it to, without touching /etc/swizzin */
+async function swizzinUpdate(): Promise<SoftwareUpdate> {
+  const [head, origin, branch] = await Promise.all([
+    swizzinGit(['log', '-1', '--format=%H %cs']),
+    swizzinGit(['config', '--get', 'remote.origin.url']),
+    swizzinGit(['symbolic-ref', '-q', '--short', 'HEAD']),
+  ])
+  const [hash, date] = head.ok ? head.stdout.trim().split(' ') : []
+  const url = origin.stdout.trim()
+  // box update follows origin/develop on the develop branch, origin/master otherwise (a detached HEAD too)
+  const ref = `refs/heads/${branch.stdout.trim() === 'develop' ? 'develop' : 'master'}`
+  // only https: git runs other transports (ssh, ext) as commands
+  const remote = hash && /^https:\/\/\S+$/.test(url) ? await remoteHead(`${url} ${ref}`).catch(() => null) : null
+  return {
+    name: 'swizzin',
+    installed: hash ? `${hash.slice(0, 7)} ${date}` : null,
+    available: remote ? remote.hash.slice(0, 7) : null,
+    state: !remote ? 'unknown' : remote.hash === hash ? 'current' : 'update',
+    checkedAt: remote?.at ?? null,
+    command: 'box update',
+  }
+}
+
+/** this swizdash against the latest release, and the command that installs it */
+async function swizdashUpdate(version: string): Promise<SoftwareUpdate> {
+  const latest = await latestRelease().catch(() => null)
+  const cmp = latest ? compareVersions(latest.version, version) : null
+  return {
+    name: 'swizdash',
+    installed: version,
+    available: latest?.version ?? null,
+    state: cmp == null ? 'unknown' : cmp > 0 ? 'update' : 'current',
+    checkedAt: latest?.at ?? null,
+    // box installs the release swizzin pins, box update brings the newest pin. The pin itself
+    // cannot be read here: box update makes /etc/swizzin/sources root-only.
+    command: 'box update && box upgrade swizdash',
+  }
+}
+
+export function softwareUpdates(version: string): Promise<SoftwareUpdate[]> {
+  return Promise.all([swizzinUpdate(), swizdashUpdate(version)])
+}
+
 // ---------- RAID ----------
 
 export async function raid() {
@@ -83,6 +166,49 @@ export const platform = cached(3600_000, async () => {
     vulnerabilities: vulns,
   }
 })
+
+// ---------- CPU health: cores offline, thermal throttling, microcode, ECC memory ----------
+
+const cpuDir = '/sys/devices/system/cpu'
+
+async function readCount(path: string): Promise<number | null> {
+  const t = (await readText(path))?.trim()
+  return t && /^\d+$/.test(t) ? Number(t) : null
+}
+
+/** world-readable sysfs and procfs, no root needed. null: the machine does not report it. */
+export async function cpuHealth() {
+  const online = parseCpuList((await readText(`${cpuDir}/online`)) ?? '')
+  const present = parseCpuList((await readText(`${cpuDir}/present`)) ?? '')
+  // the `offline` file also lists CPUs that could be plugged in but are not there
+  const offline = present.filter((n) => !online.includes(n))
+  const cpus = await Promise.all(
+    online.map(async (n) => ({
+      package: (await readCount(`${cpuDir}/cpu${n}/topology/physical_package_id`)) ?? 0,
+      core: (await readCount(`${cpuDir}/cpu${n}/topology/core_id`)) ?? n,
+      coreCount: await readCount(`${cpuDir}/cpu${n}/thermal_throttle/core_throttle_count`),
+      packageCount: await readCount(`${cpuDir}/cpu${n}/thermal_throttle/package_throttle_count`),
+    })),
+  )
+  const edacDir = '/sys/devices/system/edac/mc'
+  let controllers: string[] = []
+  try {
+    controllers = (await readdir(edacDir)).filter((d) => /^mc\d+$/.test(d))
+  } catch {
+    // no EDAC driver: no ECC memory, or a virtual machine
+  }
+  const counts = await Promise.all(
+    controllers.map(async (mc) => ({ ce: (await readCount(`${edacDir}/${mc}/ce_count`)) ?? 0, ue: (await readCount(`${edacDir}/${mc}/ue_count`)) ?? 0 })),
+  )
+  return {
+    cpus: present.length ? { online: online.length, present: present.length, offline } : null,
+    throttle: throttleTotals(cpus),
+    microcode: parseMicrocode((await readText('/proc/cpuinfo')) ?? ''),
+    ecc: controllers.length
+      ? { controllers: controllers.length, corrected: counts.reduce((a, c) => a + c.ce, 0), uncorrected: counts.reduce((a, c) => a + c.ue, 0) }
+      : null,
+  }
+}
 
 // ---------- jobs (box install / remove) ----------
 

@@ -9,9 +9,9 @@ export interface RunResult {
 }
 
 /** Runs a program without a shell. Never throws. */
-export function run(file: string, args: string[], timeoutMs = 10_000): Promise<RunResult> {
+export function run(file: string, args: string[], timeoutMs = 10_000, env: Record<string, string> = {}): Promise<RunResult> {
   return new Promise((resolve) => {
-    execFile(file, args, { timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, LC_ALL: 'C' } }, (err, stdout, stderr) => {
+    execFile(file, args, { timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, LC_ALL: 'C', ...env } }, (err, stdout, stderr) => {
       const code = err ? (typeof err.code === 'number' ? err.code : 1) : 0
       resolve({ ok: !err, code, stdout: String(stdout), stderr: String(stderr) })
     })

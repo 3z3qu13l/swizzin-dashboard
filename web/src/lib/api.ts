@@ -147,6 +147,16 @@ export interface Updates {
   packages: { name: string; origin: string; version: string; from: string; security: boolean }[]
 }
 
+export interface SoftwareUpdate {
+  name: 'swizzin' | 'swizdash'
+  installed: string | null
+  /** null: the check failed (offline, rate limit) */
+  available: string | null
+  state: 'current' | 'update' | 'unknown'
+  checkedAt: number | null
+  command: string
+}
+
 export interface Sensor {
   chip: string
   label: string
@@ -180,6 +190,14 @@ export interface Hardware {
   }
   sensors: Sensor[]
   raid: { available: boolean; arrays: RaidArray[] }
+  /** null fields: the machine does not report it */
+  health: {
+    cpus: { online: number; present: number; offline: number[] } | null
+    /** events since boot */
+    throttle: { core: number; package: number; throttledCores: number } | null
+    microcode: string[]
+    ecc: { controllers: number; corrected: number; uncorrected: number } | null
+  }
 }
 
 export interface Smart {

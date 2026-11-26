@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- System updates also say whether swizzin and swizdash are up to date, and how to update them: swizzin against the branch `box update` follows on the remote of `/etc/swizzin`, swizdash against its latest release on GitHub. The server checks at most every 3 hours, apart from the rest of the page. Offline or over the GitHub limit, it says "could not check".
+- The hardware panel shows CPU cores switched off, thermal throttling and ECC memory errors since the last boot, and the CPU microcode. What the machine does not report, like most virtual machines, says "Not available on this machine" rather than a green status.
+
 ## 0.1.2
 
 - The phone menu works like a dialog: the focus goes in and stays there, Escape closes it, and the focus comes back to the ☰ button. Closed, it leaves the keyboard order. A wider window or another page closes it.

@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
-import { Cpu, Fan, HardDrive, ShieldAlert, ShieldCheck, Thermometer } from 'lucide-react'
+import { Activity, Cpu, Fan, HardDrive, ShieldAlert, ShieldCheck, Thermometer } from 'lucide-react'
 import type { EChartsCoreOption } from 'echarts/core'
 import { useFail2ban, useHardware, useSmart } from '@/lib/queries'
-import { serverTime } from '@/lib/api'
+import { serverTime, type Hardware as HardwareData } from '@/lib/api'
 import { cn } from '@/lib/format'
 import { EChart } from '@/components/charts'
 import { useThemeColors } from '@/lib/hooks'
@@ -113,7 +113,78 @@ export function Hardware() {
           )}
         </div>
       </div>
+      <CpuHealth health={q.data.health} />
     </Card>
+  )
+}
+
+const notHere = <span className="text-muted">Not available on this machine</span>
+
+/** counters since boot; a source the machine lacks says so, never a green "none" */
+function CpuHealth({ health: h }: { health: HardwareData['health'] }) {
+  const t = h.throttle
+  const ecc = h.ecc
+  return (
+    <div className="border-t border-line px-5 py-4">
+      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted">
+        <Activity className="size-3.5" /> CPU and memory health, since the last boot
+      </h3>
+      <dl className="grid gap-x-6 sm:grid-cols-2 sm:[&>div:nth-child(2)]:border-t-0">
+        <Row label="CPU cores">
+          {!h.cpus ? (
+            notHere
+          ) : h.cpus.offline.length ? (
+            <>
+              <Badge tone="amber">{h.cpus.offline.length} offline</Badge>
+              <span className="block text-xs text-muted">CPU {h.cpus.offline.join(', ')}</span>
+            </>
+          ) : (
+            <Badge tone="green">all {h.cpus.online} online</Badge>
+          )}
+        </Row>
+        <Row label="Thermal throttling">
+          {!t ? (
+            notHere
+          ) : t.core + t.package === 0 ? (
+            <Badge tone="green">never</Badge>
+          ) : (
+            <>
+              <Badge tone="amber">
+                {t.core} core, {t.package} package events
+              </Badge>
+              <span className="block text-xs text-muted">
+                {t.throttledCores} core{t.throttledCores === 1 ? '' : 's'} slowed down to cool off
+              </span>
+            </>
+          )}
+        </Row>
+        <Row label="ECC memory errors">
+          {!ecc ? (
+            notHere
+          ) : ecc.uncorrected ? (
+            <Badge tone="red">
+              {ecc.uncorrected} uncorrected, {ecc.corrected} corrected
+            </Badge>
+          ) : ecc.corrected ? (
+            <Badge tone="amber">{ecc.corrected} corrected</Badge>
+          ) : (
+            <Badge tone="green">none</Badge>
+          )}
+        </Row>
+        <Row label="CPU microcode">
+          {h.microcode.length === 0 ? (
+            notHere
+          ) : h.microcode.length === 1 ? (
+            <span className="font-mono">{h.microcode[0]}</span>
+          ) : (
+            <>
+              <Badge tone="amber">differs between CPUs</Badge>
+              <span className="block font-mono text-xs text-muted">{h.microcode.join(', ')}</span>
+            </>
+          )}
+        </Row>
+      </dl>
+    </div>
   )
 }
 

@@ -126,3 +126,69 @@ export function jobResult(log: string, kind: string): { state: 'success' | 'fail
   const locked = end[2] === '1'
   return { state: exitCode === 0 && (kind === 'install' ? locked : !locked) ? 'success' : 'failed', exitCode }
 }
+
+/** `git ls-remote <url> <ref>`: the commit of that ref, null when the answer has none */
+export function parseLsRemote(text: string, ref: string): string | null {
+  for (const l of text.split('\n')) {
+    const [hash, name] = l.trim().split(/\s+/)
+    if (name === ref && /^[0-9a-f]{40,64}$/.test(hash)) return hash
+  }
+  return null
+}
+
+/** -1, 0 or 1 for two versions like `0.1.2` or `v0.1.10`, null when one is not a version */
+export function compareVersions(a: string, b: string): number | null {
+  const parse = (v: string) => (/^v?\d+(\.\d+)*$/.test(v.trim()) ? v.trim().replace(/^v/, '').split('.').map(Number) : null)
+  const x = parse(a)
+  const y = parse(b)
+  if (!x || !y) return null
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0)
+    if (d) return Math.sign(d)
+  }
+  return 0
+}
+
+/** a kernel CPU list like `0-3,6,8-9` (`/sys/devices/system/cpu/online`) */
+export function parseCpuList(text: string): number[] {
+  const out: number[] = []
+  for (const part of text.trim().split(',')) {
+    const m = /^(\d+)(?:-(\d+))?$/.exec(part.trim())
+    if (!m) continue
+    for (let i = Number(m[1]); i <= Number(m[2] ?? m[1]); i++) out.push(i)
+  }
+  return out
+}
+
+/**
+ * The `microcode` lines of `/proc/cpuinfo`, one entry per distinct value: CPUs that disagree
+ * point to a partial update. 0xffffffff is the placeholder hypervisors put there.
+ */
+export function parseMicrocode(cpuinfo: string): string[] {
+  const values = new Set<string>()
+  for (const m of cpuinfo.matchAll(/^microcode\s*:\s*(\S+)/gm)) if (m[1].toLowerCase() !== '0xffffffff') values.add(m[1].toLowerCase())
+  return [...values]
+}
+
+export interface ThrottleCpu {
+  package: number
+  core: number
+  coreCount: number | null
+  packageCount: number | null
+}
+
+/**
+ * Thermal throttling events since boot, from each CPU's `thermal_throttle` folder. Threads of
+ * one core share a counter, and so do the cores of one package: each is counted once.
+ */
+export function throttleTotals(cpus: ThrottleCpu[]): { core: number; package: number; throttledCores: number } | null {
+  if (!cpus.some((c) => c.coreCount != null || c.packageCount != null)) return null
+  const cores = new Map<string, number>()
+  const packages = new Map<number, number>()
+  for (const c of cpus) {
+    if (c.coreCount != null) cores.set(`${c.package}-${c.core}`, c.coreCount)
+    if (c.packageCount != null) packages.set(c.package, c.packageCount)
+  }
+  const sum = (m: Map<unknown, number>) => [...m.values()].reduce((a, b) => a + b, 0)
+  return { core: sum(cores), package: sum(packages), throttledCores: [...cores.values()].filter((n) => n > 0).length }
+}
