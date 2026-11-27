@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.7
+
+- Ombi is checked against its latest GitHub release, whether swizzin installed it from GitHub (Debian 13 and later) or from apt: its installed version is read from either. The command is `box upgrade ombi`. Where Ombi comes from apt (Ubuntu), apt.ombi.app may publish a release a little after GitHub: the update shows before apt has it.
+
 ## 0.1.6
 
 - Komga (Readers) in the catalog. Airsonic, archived upstream, is no longer installed by swizzin: it stays listed for servers that have it, to stop or remove it.
