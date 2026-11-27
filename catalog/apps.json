@@ -216,6 +216,26 @@
       }
     },
     {
+      "id": "filebrowserquantum",
+      "name": "FileBrowser Quantum",
+      "category": "File Management",
+      "desc": "Web file manager for your home folder, with search and previews",
+      "units": ["filebrowserquantum"],
+      "web": "/filebrowserquantum/",
+      "paths": {
+        "config": "/home/{user}/.config/filebrowserquantum/config.yaml",
+        "data": "/home/{user}/.config/filebrowserquantum",
+        "install": "/opt/filebrowserquantum"
+      },
+      "version": {
+        "cmd": "/opt/filebrowserquantum/filebrowser version",
+        "re": "Version\\s*:\\s*v([0-9]+(?:\\.[0-9]+)*)"
+      },
+      "latest": {
+        "github": "gtsteffaniak/filebrowser"
+      }
+    },
+    {
       "id": "flood",
       "name": "Flood",
       "category": "Download Clients",
@@ -303,6 +323,26 @@
       "paths": {},
       "version": {
         "dpkg": "jfa-go"
+      }
+    },
+    {
+      "id": "kavita",
+      "name": "Kavita",
+      "category": "Readers",
+      "desc": "Library and web reader for books, comics and manga",
+      "units": ["kavita"],
+      "web": "/kavita/",
+      "paths": {
+        "config": "/opt/kavita/config/appsettings.json",
+        "data": "/opt/kavita/config",
+        "log": "/opt/kavita/config/logs",
+        "install": "/opt/kavita"
+      },
+      "version": {
+        "file": "/opt/kavita/.swizzin-version"
+      },
+      "latest": {
+        "github": "Kareadita/Kavita"
       }
     },
     {
