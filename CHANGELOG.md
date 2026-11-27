@@ -4,6 +4,13 @@
 
 - Five themes instead of three, with translucent panels over a colored backdrop: Aurore (the default, from Night), Givre (light, from Day), Crépuscule, Abysse, and Ardoise (nearly opaque, from Dusk). A theme chosen before is replaced by the closest one. The theme menu also sets the panel opacity and the blur of the header and menu, for each browser. With the system setting "reduce transparency" (Chrome and Edge), panels are opaque.
 - The header no longer overflows the window between 1024 and 1279 pixels wide: there, the live CPU, memory and network values show without their trend lines.
+- Pages reorganized, in the menu order Home, System, Apps, Updates, Downloads, with counters for failed apps, pending updates and active torrents. The menu's app list is now called Open.
+  - Home: one sentence on the server, badges for what needs a look (none when nothing does), the resources, storage and downloads cards, and the running apps to open.
+  - System: two tabs, Activity (figures, history, traffic) and Health (hardware, disks, Fail2Ban, inventory).
+  - Apps: one page for Application control, Package management and Updates, with five filters: Installed, Running, Stopped, Updates, Available. Installed apps can be searched. Remove is in an app's details. The banner of an install or removal in progress shows on every filter.
+  - Updates: swizzin and swizdash, the system packages and the apps, in one place.
+  - Downloads: a page of its own instead of the side panel. Tiles for each status and the list of clients filter the torrents, kept in the address. Each client shows its folder, size and share done. Traffic per day is below.
+  - Old links to `/?mode=packages` and `/?mode=updates` open the matching Apps filter.
 
 ## 0.1.8
 

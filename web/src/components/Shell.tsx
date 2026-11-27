@@ -1,7 +1,22 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router'
-import { ChevronDown, Cpu, ExternalLink, LayoutGrid, Menu as MenuIcon, MemoryStick, Network, Search, Server, X } from 'lucide-react'
-import { useApps, useLive, useMeta } from '@/lib/queries'
+import {
+  ChevronDown,
+  CircleArrowUp,
+  Cpu,
+  Download,
+  ExternalLink,
+  House,
+  LayoutGrid,
+  Menu as MenuIcon,
+  MemoryStick,
+  Network,
+  Search,
+  Server,
+  X,
+} from 'lucide-react'
+import { useApps, useDownloads, useLive, useMeta } from '@/lib/queries'
+import { useAttention } from '@/lib/attention'
 import { appUrl } from '@/lib/apps'
 import { cn, pct, rate } from '@/lib/format'
 import { Spark } from './charts'
@@ -43,7 +58,7 @@ function Software({ onNavigate }: { onNavigate: () => void }) {
   if (!groups.length) return null
   return (
     <div className="mt-6">
-      <p className="px-3 pb-2 text-xs font-semibold text-muted">Software</p>
+      <p className="px-3 pb-2 text-xs font-semibold text-muted">Open</p>
       {groups.map((g) => {
         const isOpen = open[g.cat] ?? true
         return (
@@ -163,6 +178,23 @@ export function Shell({ children }: { children: ReactNode }) {
   const openNav = useRef<HTMLButtonElement>(null)
   const closeNav = useRef<HTMLButtonElement>(null)
   const meta = useMeta()
+  const attention = useAttention()
+  const downloads = useDownloads()
+  const active = (downloads.data ?? []).reduce((a, d) => a + d.active, 0)
+  const pages = [
+    { to: '/', label: 'Home', icon: House, count: 0, tone: '', what: '' },
+    { to: '/system', label: 'System', icon: Server, count: 0, tone: '', what: '' },
+    {
+      to: attention.failed.length ? '/apps?show=stopped' : '/apps',
+      label: 'Apps',
+      icon: LayoutGrid,
+      count: attention.failed.length,
+      tone: 'bg-danger/15 text-danger',
+      what: 'failed',
+    },
+    { to: '/updates', label: 'Updates', icon: CircleArrowUp, count: attention.updates, tone: 'bg-warn/15 text-warn', what: 'pending' },
+    { to: '/downloads', label: 'Downloads', icon: Download, count: active, tone: 'bg-surface-2 text-muted', what: 'active' },
+  ]
   const link = ({ isActive }: { isActive: boolean }) =>
     cn(
       'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
@@ -204,12 +236,17 @@ export function Shell({ children }: { children: ReactNode }) {
           </button>
         </div>
         <nav className="flex-1 overflow-y-auto px-3 pb-6">
-          <NavLink to="/" end className={link} onClick={() => setNav(false)}>
-            <LayoutGrid className="size-4" /> App Dashboard
-          </NavLink>
-          <NavLink to="/system" className={link} onClick={() => setNav(false)}>
-            <Server className="size-4" /> System Dashboard
-          </NavLink>
+          {pages.map((p) => (
+            <NavLink key={p.to} to={p.to} end={p.to === '/'} className={link} onClick={() => setNav(false)}>
+              <p.icon className="size-4" /> {p.label}
+              {p.count ? (
+                <span className={cn('ml-auto rounded-md px-1.5 text-xs font-semibold', p.tone)}>
+                  {p.count}
+                  <span className="sr-only"> {p.what}</span>
+                </span>
+              ) : null}
+            </NavLink>
+          ))}
           <Software onNavigate={() => setNav(false)} />
         </nav>
         <p className="border-t border-line px-5 py-3 text-xs text-muted">

@@ -1,15 +1,17 @@
 import { Fragment, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronRight, Copy, Eye, EyeOff, ExternalLink, Play, RotateCw, Square } from 'lucide-react'
+import { ChevronRight, Copy, Eye, EyeOff, ExternalLink, Play, RotateCw, Search, Square, Trash2 } from 'lucide-react'
 import { get, post, type AppInfo, type AppRow, type AppUpdate } from '@/lib/api'
 import { appUrl } from '@/lib/apps'
-import { useAppUpdates, useApps } from '@/lib/queries'
+import { useAppUpdates, useApps, useJobs } from '@/lib/queries'
 import { cn } from '@/lib/format'
 import { AppIcon } from '@/components/AppIcon'
-import { Badge, Button, Card, Empty, ErrorNote, Pager, Segmented, Spinner } from '@/components/ui'
+import { Badge, Button, Card, Empty, ErrorNote, Pager, Spinner } from '@/components/ui'
+import { JobDialog } from '@/components/JobDialog'
+import { Confirm } from './Packages'
 import { statusLabel, statusTone } from '@/lib/status'
 
-type Filter = 'all' | 'running' | 'stopped'
+export type ControlFilter = 'installed' | 'running' | 'stopped'
 
 function useServiceAction(id: string) {
   const qc = useQueryClient()
@@ -44,7 +46,7 @@ export function CopyButton({ text, label }: { text: string; label: string }) {
 
 const pathLabels: Record<string, string> = { config: 'Configuration', data: 'Data', log: 'Logs', install: 'Program' }
 
-function Details({ app, svc }: { app: AppRow; svc: ReturnType<typeof useServiceAction> }) {
+function Details({ app, svc, onRemove }: { app: AppRow; svc: ReturnType<typeof useServiceAction>; onRemove: (() => void) | null }) {
   const info = useQuery({ queryKey: ['appinfo', app.id], queryFn: () => get<AppInfo>(`/api/apps/${app.id}/info`) })
   const [showKey, setShowKey] = useState(false)
   return (
@@ -137,11 +139,29 @@ function Details({ app, svc }: { app: AppRow; svc: ReturnType<typeof useServiceA
           {!appUrl(app) && !app.port && !info.data?.apikey && <p className="text-muted">No web interface.</p>}
         </dl>
       </div>
+      <div className="flex flex-wrap items-center gap-3 border-t border-line pt-3 md:col-span-3">
+        <Button size="sm" variant="ghost" className="text-danger hover:text-danger" disabled={!app.canRemove || !onRemove} onClick={() => onRemove?.()}>
+          <Trash2 className="size-4" /> Remove {app.name}
+        </Button>
+        {app.note && <p className="flex-1 text-xs text-muted">{app.note}</p>}
+      </div>
     </div>
   )
 }
 
-function Row({ app, update, open, onToggle }: { app: AppRow; update?: AppUpdate; open: boolean; onToggle: () => void }) {
+function Row({
+  app,
+  update,
+  open,
+  onToggle,
+  onRemove,
+}: {
+  app: AppRow
+  update?: AppUpdate
+  open: boolean
+  onToggle: () => void
+  onRemove: (() => void) | null
+}) {
   const svc = useServiceAction(app.id)
   const url = appUrl(app)
   const hasUnits = app.units.length > 0
@@ -231,7 +251,7 @@ function Row({ app, update, open, onToggle }: { app: AppRow; update?: AppUpdate;
       {open && (
         <tr>
           <td colSpan={6} className="p-0">
-            <Details app={app} svc={svc} />
+            <Details app={app} svc={svc} onRemove={onRemove} />
           </td>
         </tr>
       )}
@@ -239,18 +259,25 @@ function Row({ app, update, open, onToggle }: { app: AppRow; update?: AppUpdate;
   )
 }
 
-export function AppControl() {
+export function AppControl({ filter }: { filter: ControlFilter }) {
   const q = useApps()
   const updates = useAppUpdates()
   const updateOf = useMemo(() => new Map((updates.data ?? []).map((u) => [u.id, u])), [updates.data])
-  const [filter, setFilter] = useState<Filter>('all')
+  const busy = !!useJobs().data?.some((j) => j.state === 'running')
+  const [remove, setRemove] = useState<AppRow | null>(null)
+  const [job, setJob] = useState<{ id: string; name: string } | null>(null)
   const [open, setOpen] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(20)
   const installed = useMemo(() => (q.data?.apps ?? []).filter((a) => a.installed && a.id !== 'swizdash'), [q.data])
   const running = installed.filter((a) => a.status === 'running' || a.status === 'partial')
   const stopped = installed.filter((a) => a.status === 'stopped' || a.status === 'failed')
-  const rows = filter === 'running' ? running : filter === 'stopped' ? stopped : installed
+  const [text, setText] = useState('')
+  const t = text.trim().toLowerCase()
+  const rows = (filter === 'running' ? running : filter === 'stopped' ? stopped : installed)
+    .filter((a) => !t || `${a.name} ${a.category}`.toLowerCase().includes(t))
+    // a failed app needs a look before one stopped on purpose
+    .sort((a, b) => Number(b.status === 'failed') - Number(a.status === 'failed'))
   const pages = Math.max(1, Math.ceil(rows.length / perPage))
   // the list shrinks when apps change state: never stay on a page past the end
   const current = Math.min(page, pages)
@@ -258,18 +285,14 @@ export function AppControl() {
 
   return (
     <Card>
-      <div className="flex flex-wrap items-center gap-3 px-5 py-4">
-        <Segmented
-          value={filter}
-          onChange={(f) => {
-            setFilter(f)
-            setPage(1)
-          }}
-          options={[
-            { value: 'all', label: `All ${installed.length}` },
-            { value: 'running', label: `Running ${running.length}` },
-            { value: 'stopped', label: `Stopped ${stopped.length}` },
-          ]}
+      <div className="relative mx-5 mt-4 mb-2 max-w-sm">
+        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
+        <input
+          value={text}
+          onChange={(e) => (setText(e.target.value), setPage(1))}
+          placeholder="Find an app"
+          aria-label="Find an app"
+          className="h-9 w-full rounded-lg border border-line bg-surface-2/60 pr-3 pl-9 text-sm placeholder:text-muted focus:border-accent/60 focus:outline-none"
         />
       </div>
       {q.isPending ? (
@@ -277,7 +300,9 @@ export function AppControl() {
       ) : q.error ? (
         <ErrorNote error={q.error} />
       ) : rows.length === 0 ? (
-        <Empty title={filter === 'all' ? 'No app installed yet' : `No ${filter} app`}>{filter === 'all' && 'Install one from Package Management.'}</Empty>
+        <Empty title={t ? 'No app matches' : filter === 'installed' ? 'No app installed yet' : `No ${filter} app`}>
+          {!t && filter === 'installed' && 'Install one from Available.'}
+        </Empty>
       ) : (
         <>
           <div className="overflow-x-auto">
@@ -294,7 +319,14 @@ export function AppControl() {
               </thead>
               <tbody>
                 {shown.map((a) => (
-                  <Row key={a.id} app={a} update={updateOf.get(a.id)} open={open === a.id} onToggle={() => setOpen(open === a.id ? null : a.id)} />
+                  <Row
+                    key={a.id}
+                    app={a}
+                    update={updateOf.get(a.id)}
+                    open={open === a.id}
+                    onToggle={() => setOpen(open === a.id ? null : a.id)}
+                    onRemove={busy ? null : () => setRemove(a)}
+                  />
                 ))}
               </tbody>
             </table>
@@ -302,6 +334,14 @@ export function AppControl() {
           <Pager page={current} pages={pages} onPage={setPage} total={rows.length} perPage={perPage} onPerPage={(n) => (setPerPage(n), setPage(1))} />
         </>
       )}
+      <Confirm
+        key={remove ? `remove-${remove.id}` : 'none'}
+        app={remove}
+        kind="remove"
+        onClose={() => setRemove(null)}
+        onStarted={(id, name) => setJob({ id, name })}
+      />
+      <JobDialog id={job?.id ?? null} name={job?.name ?? ''} onClose={() => setJob(null)} />
     </Card>
   )
 }

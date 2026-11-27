@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowDownUp, ClipboardCopy, Cpu, Database, HardDrive, MemoryStick, Package, Power, RefreshCw, Server } from 'lucide-react'
+import { ArrowDownUp, ClipboardCopy, Cpu, Database, HardDrive, MemoryStick, Power, RefreshCw, Server } from 'lucide-react'
 import { get, post, serverTime, type Meta } from '@/lib/api'
-import { useAppUpdates, useBandwidth, useLive, useMeta, useSoftwareUpdates, useSummary, useUpdates } from '@/lib/queries'
+import { useBandwidth, useLive, useMeta, useSummary } from '@/lib/queries'
 import { ago, bytes, cn, duration, pct, rate } from '@/lib/format'
 import { useNow } from '@/lib/hooks'
-import { Badge, Bar, Button, Card, CardHead, Dialog, Empty, ErrorNote, Menu, MenuItem, Spinner } from '@/components/ui'
+import { Bar, Button, Card, CardHead, Dialog, ErrorNote, Menu, MenuItem, Segmented } from '@/components/ui'
 import { BandwidthChart, HistoryCharts } from './SystemCharts'
 import { Disks, Fail2ban, Hardware } from './SystemHealth'
 
@@ -138,161 +139,6 @@ function Details() {
         />
       </Card>
     </div>
-  )
-}
-
-function SubHead({ title, checked }: { title: string; checked?: string }) {
-  return (
-    <div className="flex flex-wrap justify-between gap-x-3 text-xs text-muted">
-      <h3 className="font-semibold">{title}</h3>
-      {checked && <p>{checked}</p>}
-    </div>
-  )
-}
-
-/** swizzin and swizdash against their remotes, apart from the apt list: a remote can be slow or out of reach */
-function Software() {
-  const q = useSoftwareUpdates()
-  const checked = q.data?.map((s) => s.checkedAt).filter((t): t is number => t != null)
-  return (
-    <div className="px-5 pb-3">
-      <SubHead title="swizzin and swizdash" checked={checked?.length ? `Checked ${ago(serverTime(Math.min(...checked)))}` : undefined} />
-      {q.isPending ? (
-        <p className="py-2 text-sm text-muted">Checking…</p>
-      ) : q.error ? (
-        <p className="py-2 text-sm text-muted">Could not check.</p>
-      ) : (
-        <ul>
-          {q.data.map((s) => (
-            <li key={s.name} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line py-2 text-sm first:border-t-0">
-              <span className="flex-1 font-medium">{s.name}</span>
-              <span className="text-xs text-muted">
-                installed <span className="font-mono text-text">{s.installed ?? 'unknown'}</span>
-              </span>
-              {s.installed == null ? (
-                <Badge>could not read the installed version</Badge>
-              ) : s.state === 'update' ? (
-                <Badge tone="blue">{s.branch ? `newer commit on ${s.branch}` : `${s.available} available`}</Badge>
-              ) : s.state === 'current' ? (
-                <Badge tone="green">up to date</Badge>
-              ) : s.state === 'manual' ? (
-                <Badge>managed manually</Badge>
-              ) : (
-                <Badge>could not check</Badge>
-              )}
-              {s.state === 'manual' && (
-                <p className="w-full text-xs text-muted">
-                  <code className="font-mono text-text">box update</code> leaves /etc/swizzin as it is: it is a link, or has a .dev.lock file.
-                </p>
-              )}
-              {s.state === 'update' && (
-                <p className="w-full text-xs text-muted">
-                  Update it over SSH with <code className="font-mono text-text">{s.command}</code>.
-                  {s.name === 'swizdash' && ' box installs the release swizzin has checked, which can come a little after the release itself.'}
-                </p>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
-}
-
-/** installed apps against apt's candidate or the project's latest release; only updates are listed */
-function AppUpdatesSection() {
-  const q = useAppUpdates()
-  const rows = q.data ?? []
-  const pending = rows.filter((r) => r.state === 'update')
-  const unknown = rows.filter((r) => r.state === 'unknown')
-  const checked = rows.map((r) => r.checkedAt).filter((t): t is number => t != null)
-  return (
-    <div className="border-t border-line px-5 pt-3 pb-3">
-      <SubHead title="Apps" checked={checked.length ? `Checked ${ago(serverTime(Math.min(...checked)))}` : undefined} />
-      {q.isPending ? (
-        <p className="py-2 text-sm text-muted">Checking…</p>
-      ) : q.error ? (
-        <p className="py-2 text-sm text-muted">Could not check.</p>
-      ) : (
-        <>
-          {pending.length === 0 ? (
-            <p className="py-2 text-sm text-muted">Every app that can be checked is up to date.</p>
-          ) : (
-            <ul>
-              {pending.map((u) => (
-                <li key={u.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line py-2 text-sm first:border-t-0">
-                  <span className="flex-1 font-medium">{u.name}</span>
-                  <span className="text-xs text-muted">
-                    installed <span className="font-mono text-text">{u.installed}</span>
-                  </span>
-                  <Badge tone="blue">{u.available} available</Badge>
-                  <p className="w-full text-xs text-muted">
-                    {u.command ? (
-                      <>
-                        Update it over SSH with <code className="font-mono text-text">{u.command}</code>.
-                      </>
-                    ) : (
-                      'box has no upgrade for this app: a newer release exists upstream.'
-                    )}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-          {unknown.length > 0 && <p className="pt-1 text-xs text-muted">Could not check: {unknown.map((u) => u.name).join(', ')}.</p>}
-        </>
-      )}
-    </div>
-  )
-}
-
-function Updates() {
-  const q = useUpdates()
-  const pkgs = q.data?.packages ?? []
-  const security = pkgs.filter((p) => p.security).length
-  return (
-    <Card>
-      <CardHead
-        icon={<Package className="size-4" />}
-        title="System updates"
-        hint="swizzin, swizdash, the apps and the system packages"
-        right={
-          pkgs.length > 0 ? (
-            <Badge tone={security ? 'amber' : 'blue'}>
-              {pkgs.length} pending{security ? `, ${security} security` : ''}
-            </Badge>
-          ) : null
-        }
-      />
-      <Software />
-      <AppUpdatesSection />
-      <div className="border-t border-line px-5 pt-3">
-        <SubHead title="System packages" checked={q.data ? `Checked ${ago(serverTime(q.data.checkedAt))}` : undefined} />
-      </div>
-      {q.isPending ? (
-        <Spinner />
-      ) : q.error ? (
-        <ErrorNote error={q.error} />
-      ) : pkgs.length === 0 ? (
-        <Empty title="Every system package is up to date" />
-      ) : (
-        <>
-          <ul className="max-h-72 overflow-auto px-5">
-            {pkgs.map((p) => (
-              <li key={p.name} className="flex items-center gap-3 border-t border-line py-2 text-sm first:border-t-0">
-                <span className="flex-1 truncate font-medium">{p.name}</span>
-                {p.security && <Badge tone="amber">security</Badge>}
-                <span className="hidden font-mono text-xs text-muted sm:inline">{p.version}</span>
-              </li>
-            ))}
-          </ul>
-          <p className="border-t border-line px-5 py-3 text-xs text-muted">
-            Apply them over SSH with <code className="font-mono text-text">box upgrade</code> for swizzin apps, or{' '}
-            <code className="font-mono text-text">apt upgrade</code> for the system.
-          </p>
-        </>
-      )}
-    </Card>
   )
 }
 
@@ -450,6 +296,8 @@ function PowerDialog({ action, onClose }: { action: 'reboot' | 'poweroff' | null
 }
 
 export function SystemDashboard() {
+  const [params, setParams] = useSearchParams()
+  const tab = params.get('tab') === 'health' ? 'health' : 'activity'
   const qc = useQueryClient()
   const s = useSummary()
   const meta = useMeta()
@@ -516,17 +364,29 @@ export function SystemDashboard() {
         </div>
       </div>
 
-      {s.error ? <ErrorNote error={s.error} /> : <Tiles />}
-      <Details />
-      <HistoryCharts />
-      <BandwidthChart />
-      <Hardware />
-      <Disks />
-      <Fail2ban />
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Updates />
-        <Inventory />
-      </div>
+      <Segmented
+        value={tab}
+        onChange={(t) => setParams(t === 'activity' ? {} : { tab: t }, { replace: true })}
+        options={[
+          { value: 'activity', label: 'Activity' },
+          { value: 'health', label: 'Health' },
+        ]}
+      />
+      {tab === 'activity' ? (
+        <>
+          {s.error ? <ErrorNote error={s.error} /> : <Tiles />}
+          <Details />
+          <HistoryCharts />
+          <BandwidthChart />
+        </>
+      ) : (
+        <>
+          <Hardware />
+          <Disks />
+          <Fail2ban />
+          <Inventory />
+        </>
+      )}
       {/* a new dialog each time: no word typed or error left from the last one */}
       <PowerDialog key={power ?? 'none'} action={power} onClose={() => setPower(null)} />
     </div>

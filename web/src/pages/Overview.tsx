@@ -4,8 +4,8 @@ import { useDownloads, useLive, useQuota, useSummary } from '@/lib/queries'
 import { bytes, pct } from '@/lib/format'
 import { Ring } from '@/components/charts'
 import { useThemeColors } from '@/lib/hooks'
-import { Bar, Button, Card, CardHead, Empty, ErrorNote, Segmented, Spinner } from '@/components/ui'
-import { DownloadActivity } from '@/components/DownloadActivity'
+import { Bar, Card, CardHead, Empty, ErrorNote, Segmented, Spinner } from '@/components/ui'
+import { Link } from 'react-router'
 import { clientNames, downloadKey } from '@/lib/downloads'
 
 function Storage() {
@@ -107,7 +107,6 @@ function Resources() {
 
 function Downloads() {
   const q = useDownloads()
-  const [open, setOpen] = useState<string | null>(null)
   const list = q.data ?? []
   const active = list.reduce((a, d) => a + d.active, 0)
   return (
@@ -118,9 +117,9 @@ function Downloads() {
         hint="rTorrent, qBittorrent, Transmission and Deluge, every user"
         right={
           list.length > 0 ? (
-            <Button size="sm" variant="ghost" onClick={() => setOpen(downloadKey(list[0]))}>
+            <Link to="/downloads" className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted hover:bg-surface-2 hover:text-text">
               Show torrents
-            </Button>
+            </Link>
           ) : null
         }
       />
@@ -133,22 +132,19 @@ function Downloads() {
           <Empty title="No torrent client is running" />
         ) : (
           list.map((d) => (
-            <button
+            <Link
               key={downloadKey(d)}
-              type="button"
-              onClick={() => setOpen(downloadKey(d))}
+              to={`/downloads?client=${encodeURIComponent(downloadKey(d))}`}
               className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface-2/60 px-3 py-1.5 text-sm hover:border-accent/50"
             >
               {clientNames[d.client]}
               {new Set(list.map((x) => x.user)).size > 1 && <span className="text-xs text-muted">{d.user}</span>}
               <span className="rounded-md bg-accent/15 px-1.5 text-xs font-semibold text-accent">{d.active}</span>
               <span className="text-xs text-muted">of {d.total}</span>
-            </button>
+            </Link>
           ))
         )}
       </div>
-      {/* mounted per opening, so it starts on the client that was clicked */}
-      {open && <DownloadActivity open onOpenChange={(o) => !o && setOpen(null)} initial={open} />}
     </Card>
   )
 }
