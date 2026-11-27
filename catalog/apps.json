@@ -988,6 +988,25 @@
       }
     },
     {
+      "id": "transfersh",
+      "name": "transfer.sh",
+      "category": "File Management",
+      "desc": "Share files through a link, uploaded from the command line",
+      "units": ["transfersh"],
+      "web": "/transfersh/",
+      "paths": {
+        "data": "/home/{user}/transfersh/files",
+        "install": "/opt/transfersh"
+      },
+      "version": {
+        "file": "/opt/transfersh/.swizzin-version"
+      },
+      "latest": {
+        "github": "dutchcoders/transfer.sh"
+      },
+      "removeInteractive": true
+    },
+    {
       "id": "transmission",
       "name": "Transmission",
       "category": "Download Clients",
