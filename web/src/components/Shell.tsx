@@ -1,32 +1,13 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router'
-import { ChevronDown, Cpu, ExternalLink, LayoutGrid, Menu as MenuIcon, MemoryStick, Network, Palette, Search, Server, X } from 'lucide-react'
+import { ChevronDown, Cpu, ExternalLink, LayoutGrid, Menu as MenuIcon, MemoryStick, Network, Search, Server, X } from 'lucide-react'
 import { useApps, useLive, useMeta } from '@/lib/queries'
 import { appUrl } from '@/lib/apps'
 import { cn, pct, rate } from '@/lib/format'
 import { Spark } from './charts'
 import { useThemeColors } from '@/lib/hooks'
-import { Menu, MenuItem, StatusDot } from './ui'
-
-const themes = [
-  { id: 'night', label: 'Night' },
-  { id: 'dusk', label: 'Dusk' },
-  { id: 'day', label: 'Day' },
-]
-
-function useTheme(): [string, (t: string) => void] {
-  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme ?? 'night')
-  const set = (t: string) => {
-    document.documentElement.dataset.theme = t
-    try {
-      localStorage.setItem('swizdash-theme', t)
-    } catch {
-      // private window
-    }
-    setTheme(t)
-  }
-  return [theme, set]
-}
+import { StatusDot } from './ui'
+import { ThemePicker } from './ThemePicker'
 
 function LiveStrip() {
   const { live, trail } = useLive()
@@ -178,7 +159,6 @@ export function Shell({ children }: { children: ReactNode }) {
   }
   const openNav = useRef<HTMLButtonElement>(null)
   const closeNav = useRef<HTMLButtonElement>(null)
-  const [theme, setTheme] = useTheme()
   const meta = useMeta()
   const link = ({ isActive }: { isActive: boolean }) =>
     cn(
@@ -209,7 +189,7 @@ export function Shell({ children }: { children: ReactNode }) {
         // closed off screen, the drawer also leaves the keyboard order and screen readers
         inert={!nav && !wide}
         className={cn(
-          'fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-line bg-surface/95 backdrop-blur transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0',
+          'glass frost fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0',
           nav ? 'translate-x-0' : '-translate-x-full',
         )}
       >
@@ -236,27 +216,14 @@ export function Shell({ children }: { children: ReactNode }) {
       {nav && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setNav(false)} />}
 
       <div className="min-w-0 flex-1" inert={drawer}>
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-line bg-bg/80 px-4 backdrop-blur sm:px-6">
+        <header className="glass frost sticky top-0 z-20 flex h-16 items-center gap-4 border-b px-4 sm:px-6">
           <button ref={openNav} className="lg:hidden" onClick={() => setNav(true)} aria-label="Open menu" aria-expanded={nav} aria-controls="sidebar">
             <MenuIcon className="size-5" />
           </button>
           <SearchBox />
           <div className="ml-auto flex items-center gap-4">
             <LiveStrip />
-            <Menu
-              trigger={
-                <button className="grid size-9 place-items-center rounded-lg border border-line text-muted hover:text-text" aria-label="Theme">
-                  <Palette className="size-4" />
-                </button>
-              }
-            >
-              {themes.map((t) => (
-                <MenuItem key={t.id} onSelect={() => setTheme(t.id)}>
-                  <span className={cn('size-2 rounded-full', theme === t.id ? 'bg-accent' : 'bg-transparent')} />
-                  {t.label}
-                </MenuItem>
-              ))}
-            </Menu>
+            <ThemePicker />
           </div>
         </header>
         <main className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:py-8">{children}</main>

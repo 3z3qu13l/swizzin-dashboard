@@ -6,7 +6,7 @@ import type { Status } from '@/lib/api'
 import type { Tone } from '@/lib/status'
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <section className={cn('rounded-xl border border-line bg-surface/90 backdrop-blur-sm', className)}>{children}</section>
+  return <section className={cn('glass rounded-2xl border', className)}>{children}</section>
 }
 
 export function CardHead({ icon, title, hint, right }: { icon?: ReactNode; title: ReactNode; hint?: ReactNode; right?: ReactNode }) {

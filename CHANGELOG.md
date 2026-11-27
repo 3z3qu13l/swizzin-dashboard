@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.9
+
+- Five themes instead of three, with translucent panels over a colored backdrop: Aurore (the default, from Night), Givre (light, from Day), Crépuscule, Abysse, and Ardoise (nearly opaque, from Dusk). A theme chosen before is replaced by the closest one. The theme menu also sets the panel opacity and the blur of the header and menu, for each browser. With the system setting "reduce transparency" (Chrome and Edge), panels are opaque.
+
 ## 0.1.8
 
 - transfer.sh (File Management) in the catalog: swizdash installs it, shows its updates, and checks its latest release on GitHub. It needs nginx, and swizzin with its box scripts. Its removal asks whether to delete the shared files: it runs with `box remove transfersh` over SSH.
