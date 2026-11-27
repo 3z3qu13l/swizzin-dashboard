@@ -3,6 +3,7 @@
 ## 0.1.9
 
 - Five themes instead of three, with translucent panels over a colored backdrop: Aurore (the default, from Night), Givre (light, from Day), Crépuscule, Abysse, and Ardoise (nearly opaque, from Dusk). A theme chosen before is replaced by the closest one. The theme menu also sets the panel opacity and the blur of the header and menu, for each browser. With the system setting "reduce transparency" (Chrome and Edge), panels are opaque.
+- The header no longer overflows the window between 1024 and 1279 pixels wide: there, the live CPU, memory and network values show without their trend lines.
 
 ## 0.1.8
 

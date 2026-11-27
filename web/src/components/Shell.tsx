@@ -24,7 +24,10 @@ function LiveStrip() {
           <i.icon className="size-4 text-muted" aria-hidden />
           <span className="sr-only">{i.label}</span>
           <span className="w-[5.5rem] text-sm font-semibold whitespace-nowrap">{i.value}</span>
-          <Spark values={i.values} color={i.color} max={i.max} />
+          {/* the trend lines need the width of a large screen: with them, the header overflows below 1280px */}
+          <span className="hidden xl:contents">
+            <Spark values={i.values} color={i.color} max={i.max} />
+          </span>
         </div>
       ))}
     </div>
@@ -95,7 +98,7 @@ function SearchBox() {
   const [q, setQ] = useState('')
   const hits = q.trim() ? (apps.data?.apps ?? []).filter((a) => a.installed && a.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 6) : []
   return (
-    <div className="relative w-full max-w-sm">
+    <div className="relative w-full max-w-sm min-w-0">
       <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
       <input
         value={q}
