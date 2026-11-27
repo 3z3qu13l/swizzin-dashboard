@@ -166,6 +166,21 @@ export function versionNumber(text: string): string | null {
   return /\d+(?:\.\d+)+/.exec(text)?.[0] ?? null
 }
 
+/**
+ * the release tag in the address github.com/<repo>/releases/latest redirects to
+ * (`https://github.com/Novik/ruTorrent/releases/tag/v5.3.27`); null for a repository without a release, which
+ * redirects to its release list
+ */
+export function releaseTag(location: string | null): string | null {
+  const m = location && /\/releases\/tag\/([^/?#]+)$/.exec(location)
+  if (!m) return null
+  try {
+    return decodeURIComponent(m[1])
+  } catch {
+    return null
+  }
+}
+
 /** `apt-cache policy <package>` in the C locale: installed and candidate versions, null when none */
 export function parseAptPolicy(text: string): { installed: string | null; candidate: string | null } {
   const field = (name: string) => {

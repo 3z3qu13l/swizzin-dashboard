@@ -14,6 +14,7 @@ import {
   parseLsRemote,
   parseMdstat,
   parseMicrocode,
+  releaseTag,
   throttleTotals,
   versionNumber,
 } from './parse.ts'
@@ -61,7 +62,6 @@ export const updates = cached(30 * 60_000, async () => {
 // ---------- swizzin and swizdash ----------
 
 const swizzinDir = '/etc/swizzin'
-// GitHub allows 60 unauthenticated API calls an hour per address, often shared on seedbox hosts:
 // a good answer is kept a few hours, a failure 10 minutes so a dead network does not slow every visit
 const remoteTtl = (v: unknown) => (v ? 3 * 3600_000 : 10 * 60_000)
 const remoteTimeout = 8_000
@@ -93,17 +93,34 @@ const remoteHead = keyed(remoteTtl, async (key) => {
   return hash ? { hash, at: Date.now() } : null
 })
 
-const latestRelease = cached(remoteTtl, async () => {
+/**
+ * the tag of a repository's latest release, read where github.com/<repo>/releases/latest redirects to, as
+ * swizzin's github_latest_version does. The GitHub API allows 60 calls an hour per address without an account,
+ * often shared on seedbox hosts; the web site's limits are far looser. null: no release, or GitHub out of reach.
+ */
+async function latestReleaseTag(repo: string): Promise<string | null> {
+  let url = `https://github.com/${repo}/releases/latest`
   try {
-    const res = await fetch(`https://api.github.com/repos/${swizdashRepo}/releases/latest`, {
-      headers: { accept: 'application/vnd.github+json', 'user-agent': 'swizdash' },
-      signal: AbortSignal.timeout(remoteTimeout),
-    })
-    const tag = res.ok ? ((await res.json()) as { tag_name?: unknown }).tag_name : null
-    return typeof tag === 'string' ? { version: tag.replace(/^v/, ''), at: Date.now() } : null
+    // a renamed repository first redirects to its new name's releases/latest: followed twice at most
+    for (let hop = 0; hop < 3; hop++) {
+      const res = await fetch(url, { method: 'HEAD', redirect: 'manual', headers: { 'user-agent': 'swizdash' }, signal: AbortSignal.timeout(remoteTimeout) })
+      const location = res.headers.get('location')
+      const tag = releaseTag(location)
+      if (tag || !location) return tag
+      const next = new URL(location, url)
+      if (next.origin !== 'https://github.com' || !next.pathname.endsWith('/releases/latest')) return null
+      url = next.href
+    }
+    return null
   } catch {
     return null
   }
+}
+
+const latestRelease = cached(remoteTtl, async () => {
+  const tag = await latestReleaseTag(swizdashRepo)
+  const version = tag ? versionNumber(tag) : null
+  return version ? { version, at: Date.now() } : null
 })
 
 const exists = (p: string) =>
@@ -178,23 +195,14 @@ export interface AppUpdate {
   command: string | null
 }
 
-// a release is checked every 6 hours: with ~20 apps, a few calls an hour against GitHub's 60.
-// A failure is tried again after 15 minutes: calls GitHub refuses over the limit do not count
+// a release is checked every 6 hours, a failure again after 15 minutes
 const releaseTtl = (v: unknown) => (v ? 6 * 3600_000 : 15 * 60_000)
 
 // key: owner/repo, from the catalog only
 const githubRelease = keyed(releaseTtl, async (repo) => {
-  try {
-    const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
-      headers: { accept: 'application/vnd.github+json', 'user-agent': 'swizdash' },
-      signal: AbortSignal.timeout(remoteTimeout),
-    })
-    const tag = res.ok ? ((await res.json()) as { tag_name?: unknown }).tag_name : null
-    const version = typeof tag === 'string' ? versionNumber(tag) : null
-    return version ? { version, at: Date.now() } : null
-  } catch {
-    return null
-  }
+  const tag = await latestReleaseTag(repo)
+  const version = tag ? versionNumber(tag) : null
+  return version ? { version, at: Date.now() } : null
 })
 
 // apt's own lists, refreshed by the system: no network here

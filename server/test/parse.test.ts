@@ -8,6 +8,7 @@ import {
   parseAptPolicy,
   parseMdstat,
   parseSystemctlShow,
+  releaseTag,
   statusOf,
   versionNumber,
   type UnitState,
@@ -118,4 +119,15 @@ test('apt-cache policy: installed and candidate, (none) as null', () => {
   assert.deepEqual(parseAptPolicy(text), { installed: '10.11.2+deb13u1', candidate: '10.11.3+deb13u1' })
   assert.deepEqual(parseAptPolicy('znc:\n  Installed: (none)\n  Candidate: 1.10.1-1\n'), { installed: null, candidate: '1.10.1-1' })
   assert.deepEqual(parseAptPolicy(''), { installed: null, candidate: null })
+})
+
+test('release tag from the redirect of releases/latest', () => {
+  assert.equal(releaseTag('https://github.com/Novik/ruTorrent/releases/tag/v5.3.27'), 'v5.3.27')
+  assert.equal(releaseTag('https://github.com/SickGear/SickGear/releases/tag/release_3.37.1'), 'release_3.37.1')
+  assert.equal(releaseTag('https://github.com/a/b/releases/tag/v1.0%2Bbuild'), 'v1.0+build')
+  assert.equal(releaseTag('https://github.com/a/b/releases/tag/foo%2Fv1'), 'foo/v1')
+  assert.equal(releaseTag('/a/b/releases/tag/v1.2.0'), 'v1.2.0')
+  // no release yet: GitHub sends the release list
+  assert.equal(releaseTag('https://github.com/a/b/releases'), null)
+  assert.equal(releaseTag(null), null)
 })
