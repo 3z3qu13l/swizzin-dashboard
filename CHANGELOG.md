@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.6
+
+- Komga (Readers) in the catalog. Airsonic, archived upstream, is no longer installed by swizzin: it stays listed for servers that have it, to stop or remove it.
+
 ## 0.1.5
 
 - Kavita (Readers) and FileBrowser Quantum (File Management) in the catalog: swizdash installs, removes and updates them, and checks their latest release on GitHub. They need swizzin with their box scripts.
