@@ -158,6 +158,23 @@ export function compareVersions(a: string, b: string): number | null {
   return Math.sign(x.pre.localeCompare(y.pre, 'en', { numeric: true }))
 }
 
+/**
+ * the version number in a release tag or a version probe: `v5.3.27`, `release_3.37.1`, `5.1.3`, or
+ * `2.19.1-16-ga125cf08` from git describe (commits after the release are not a newer release)
+ */
+export function versionNumber(text: string): string | null {
+  return /\d+(?:\.\d+)+/.exec(text)?.[0] ?? null
+}
+
+/** `apt-cache policy <package>` in the C locale: installed and candidate versions, null when none */
+export function parseAptPolicy(text: string): { installed: string | null; candidate: string | null } {
+  const field = (name: string) => {
+    const v = new RegExp(`^\\s*${name}:\\s*(\\S+)`, 'm').exec(text)?.[1]
+    return v && v !== '(none)' ? v : null
+  }
+  return { installed: field('Installed'), candidate: field('Candidate') }
+}
+
 /** a kernel CPU list like `0-3,6,8-9` (`/sys/devices/system/cpu/online`) */
 export function parseCpuList(text: string): number[] {
   const out: number[] = []

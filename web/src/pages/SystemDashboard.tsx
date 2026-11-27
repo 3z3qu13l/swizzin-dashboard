@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowDownUp, ClipboardCopy, Cpu, Database, HardDrive, MemoryStick, Package, Power, RefreshCw, Server } from 'lucide-react'
 import { get, post, serverTime, type Meta } from '@/lib/api'
-import { useBandwidth, useLive, useMeta, useSoftwareUpdates, useSummary, useUpdates } from '@/lib/queries'
+import { useAppUpdates, useBandwidth, useLive, useMeta, useSoftwareUpdates, useSummary, useUpdates } from '@/lib/queries'
 import { ago, bytes, cn, duration, pct, rate } from '@/lib/format'
 import { useNow } from '@/lib/hooks'
 import { Badge, Bar, Button, Card, CardHead, Dialog, Empty, ErrorNote, Menu, MenuItem, Spinner } from '@/components/ui'
@@ -199,6 +199,53 @@ function Software() {
   )
 }
 
+/** installed apps against apt's candidate or the project's latest release; only updates are listed */
+function AppUpdates() {
+  const q = useAppUpdates()
+  const rows = q.data ?? []
+  const pending = rows.filter((r) => r.state === 'update')
+  const unknown = rows.filter((r) => r.state === 'unknown')
+  const checked = rows.map((r) => r.checkedAt).filter((t): t is number => t != null)
+  return (
+    <div className="border-t border-line px-5 pt-3 pb-3">
+      <SubHead title="Apps" checked={checked.length ? `Checked ${ago(serverTime(Math.min(...checked)))}` : undefined} />
+      {q.isPending ? (
+        <p className="py-2 text-sm text-muted">Checking…</p>
+      ) : q.error ? (
+        <p className="py-2 text-sm text-muted">Could not check.</p>
+      ) : (
+        <>
+          {pending.length === 0 ? (
+            <p className="py-2 text-sm text-muted">Every app that can be checked is up to date.</p>
+          ) : (
+            <ul>
+              {pending.map((u) => (
+                <li key={u.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line py-2 text-sm first:border-t-0">
+                  <span className="flex-1 font-medium">{u.name}</span>
+                  <span className="text-xs text-muted">
+                    installed <span className="font-mono text-text">{u.installed}</span>
+                  </span>
+                  <Badge tone="blue">{u.available} available</Badge>
+                  <p className="w-full text-xs text-muted">
+                    {u.command ? (
+                      <>
+                        Update it over SSH with <code className="font-mono text-text">{u.command}</code>.
+                      </>
+                    ) : (
+                      'box has no upgrade for this app: a newer release exists upstream.'
+                    )}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+          {unknown.length > 0 && <p className="pt-1 text-xs text-muted">Could not check: {unknown.map((u) => u.name).join(', ')}.</p>}
+        </>
+      )}
+    </div>
+  )
+}
+
 function Updates() {
   const q = useUpdates()
   const pkgs = q.data?.packages ?? []
@@ -208,7 +255,7 @@ function Updates() {
       <CardHead
         icon={<Package className="size-4" />}
         title="System updates"
-        hint="swizzin, swizdash and the system packages"
+        hint="swizzin, swizdash, the apps and the system packages"
         right={
           pkgs.length > 0 ? (
             <Badge tone={security ? 'amber' : 'blue'}>
@@ -218,6 +265,7 @@ function Updates() {
         }
       />
       <Software />
+      <AppUpdates />
       <div className="border-t border-line px-5 pt-3">
         <SubHead title="System packages" checked={q.data ? `Checked ${ago(serverTime(q.data.checkedAt))}` : undefined} />
       </div>

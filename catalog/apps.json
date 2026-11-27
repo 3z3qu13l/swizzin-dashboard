@@ -44,8 +44,11 @@
         "log": "/home/{user}/.config/autobrr/logs"
       },
       "version": {
-        "cmd": "/usr/local/bin/autobrr version",
-        "re": "Version: v?([0-9]+(?:\\.[0-9]+)*)"
+        "cmd": "autobrr version",
+        "re": "v?([0-9]+(?:\\.[0-9]+)*)"
+      },
+      "latest": {
+        "github": "autobrr/autobrr"
       }
     },
     {
@@ -68,6 +71,9 @@
       },
       "version": {
         "file": "/opt/bazarr/VERSION"
+      },
+      "latest": {
+        "github": "morpheus65535/bazarr"
       }
     },
     {
@@ -102,6 +108,9 @@
       "version": {
         "cmd": "/opt/calibre/calibre --version",
         "re": "calibre ([0-9]+(?:\\.[0-9]+)*)"
+      },
+      "latest": {
+        "github": "kovidgoyal/calibre"
       }
     },
     {
@@ -168,7 +177,10 @@
       "version": {
         "dpkg": "emby-server"
       },
-      "interactive": true
+      "interactive": true,
+      "latest": {
+        "github": "MediaBrowser/Emby.Releases"
+      }
     },
     {
       "id": "ffmpeg",
@@ -198,7 +210,10 @@
         "cmd": "/home/{user}/bin/filebrowser version",
         "re": "v([0-9]+(?:\\.[0-9]+)*)"
       },
-      "interactive": true
+      "interactive": true,
+      "latest": {
+        "github": "filebrowser/filebrowser"
+      }
     },
     {
       "id": "flood",
@@ -214,6 +229,9 @@
       "version": {
         "cmd": "flood --version",
         "re": "v?([0-9]+(?:\\.[0-9]+)*)"
+      },
+      "latest": {
+        "github": "jesec/flood"
       }
     },
     {
@@ -235,6 +253,9 @@
         "scheme": "https",
         "site": "homepage",
         "path": "/"
+      },
+      "latest": {
+        "github": "gethomepage/homepage"
       }
     },
     {
@@ -344,6 +365,9 @@
       "version": {
         "cmd": "thelounge --version",
         "re": "v?([0-9]+(?:\\.[0-9]+)*)"
+      },
+      "latest": {
+        "github": "thelounge/thelounge"
       }
     },
     {
@@ -360,7 +384,10 @@
       "version": {
         "git": "/opt/medusa"
       },
-      "interactive": true
+      "interactive": true,
+      "latest": {
+        "github": "pymedusa/Medusa"
+      }
     },
     {
       "id": "mylar",
@@ -390,6 +417,9 @@
       "version": {
         "cmd": "/opt/navidrome/navidrome --version",
         "re": "([0-9]+(?:\\.[0-9]+)*)"
+      },
+      "latest": {
+        "github": "navidrome/navidrome"
       }
     },
     {
@@ -405,6 +435,9 @@
       "version": {
         "cmd": "netdata -v",
         "re": "v([0-9]+(?:\\.[0-9]+)*)"
+      },
+      "latest": {
+        "apt": "netdata"
       }
     },
     {
@@ -481,6 +514,9 @@
       "version": {
         "cmd": "grep -m1 '^### v' /opt/nzbhydra2/changelog.md",
         "re": "v([0-9]+(?:\\.[0-9]+)*)"
+      },
+      "latest": {
+        "github": "theotherp/nzbhydra2"
       }
     },
     {
@@ -612,8 +648,11 @@
         "data": "/home/{user}/.config/qui"
       },
       "version": {
-        "cmd": "/usr/local/bin/qui version",
+        "cmd": "qui version",
         "re": "v?([0-9]+(?:\\.[0-9]+)*)"
+      },
+      "latest": {
+        "github": "autobrr/qui"
       }
     },
     {
@@ -674,6 +713,9 @@
       "version": {
         "cmd": "rclone version",
         "re": "rclone v([0-9]+(?:\\.[0-9]+)*)"
+      },
+      "latest": {
+        "github": "rclone/rclone"
       }
     },
     {
@@ -707,6 +749,9 @@
       },
       "version": {
         "git": "/srv/rutorrent"
+      },
+      "latest": {
+        "github": "Novik/ruTorrent"
       }
     },
     {
@@ -727,7 +772,11 @@
         "key": "api_key"
       },
       "version": {
-        "git": "/opt/sabnzbd"
+        "cmd": "grep -m1 \"^__version__\" /opt/sabnzbd/sabnzbd/version.py",
+        "re": "\"v?([0-9]+(?:\\.[0-9]+)*)\""
+      },
+      "latest": {
+        "github": "sabnzbd/sabnzbd"
       }
     },
     {
@@ -751,6 +800,9 @@
       "web": "/shinkro/",
       "paths": {
         "data": "/home/{user}/.config/shinkro"
+      },
+      "latest": {
+        "github": "shinkro/shinkro"
       }
     },
     {
@@ -778,7 +830,10 @@
       "version": {
         "git": "/opt/sickgear"
       },
-      "interactive": true
+      "interactive": true,
+      "latest": {
+        "github": "SickGear/SickGear"
+      }
     },
     {
       "id": "sonarr",
@@ -839,6 +894,9 @@
       "version": {
         "cmd": "syncthing --version",
         "re": "v([0-9]+(?:\\.[0-9]+)*)"
+      },
+      "latest": {
+        "apt": "syncthing"
       }
     },
     {
@@ -860,6 +918,9 @@
       },
       "version": {
         "git": "/opt/tautulli"
+      },
+      "latest": {
+        "github": "Tautulli/Tautulli"
       }
     },
     {
@@ -877,6 +938,9 @@
       "version": {
         "cmd": "transmission-daemon -V",
         "re": "transmission-daemon ([0-9]+(?:\\.[0-9]+)*)"
+      },
+      "latest": {
+        "apt": "transmission-daemon"
       }
     },
     {
@@ -954,6 +1018,9 @@
       "version": {
         "cmd": "znc --version",
         "re": "ZNC ([0-9]+(?:\\.[0-9]+)*)"
+      },
+      "latest": {
+        "apt": "znc"
       }
     }
   ]

@@ -161,6 +161,20 @@ export interface SoftwareUpdate {
   command: string
 }
 
+export interface AppUpdate {
+  id: string
+  name: string
+  source: 'apt' | 'github'
+  /** null: the installed version could not be read */
+  installed: string | null
+  /** null: the check failed (offline, rate limit, no release) */
+  available: string | null
+  state: 'current' | 'update' | 'unknown'
+  checkedAt: number | null
+  /** null: box has no upgrade script for it */
+  command: string | null
+}
+
 export interface Sensor {
   chip: string
   label: string
