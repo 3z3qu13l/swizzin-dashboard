@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.8
+
+- transfer.sh (File Management) in the catalog: swizdash installs it, shows its updates, and checks its latest release on GitHub. It needs nginx, and swizzin with its box scripts. Its removal asks whether to delete the shared files: it runs with `box remove transfersh` over SSH.
+
 ## 0.1.7
 
 - Ombi is checked against its latest GitHub release, whether swizzin installed it from GitHub (Debian 13 and later) or from apt: its installed version is read from either. The command is `box upgrade ombi`. Where Ombi comes from apt (Ubuntu), apt.ombi.app may publish a release a little after GitHub: the update shows before apt has it.
