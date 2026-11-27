@@ -19,6 +19,8 @@ export interface CatalogApp {
   paths: Record<string, string>
   apikey?: { file: string; type: string; key: string }
   version?: { dpkg?: string; cmd?: string; re?: string; git?: string; json?: string; key?: string; file?: string; arr?: string; api?: string }
+  /** where the newest version is read: an apt package, or a GitHub repository's latest release */
+  latest?: { apt?: string; github?: string }
   interactive?: boolean
   removeInteractive?: boolean
   core?: boolean
@@ -196,10 +198,10 @@ export interface AppRow {
   note: string | null
 }
 
-/** install and remove scripts of box, listed by the helper: /etc/swizzin is root only */
-const boxScripts = cached(10 * 60_000, async () => {
-  const r = await helperJson<{ install?: string[]; remove?: string[] }>(['scripts'])
-  return { install: new Set(r.install ?? []), remove: new Set(r.remove ?? []) }
+/** install, remove and upgrade scripts of box, listed by the helper: /etc/swizzin is root only */
+export const boxScripts = cached(10 * 60_000, async () => {
+  const r = await helperJson<{ install?: string[]; remove?: string[]; upgrade?: string[] }>(['scripts'])
+  return { install: new Set(r.install ?? []), remove: new Set(r.remove ?? []), upgrade: new Set(r.upgrade ?? []) }
 })
 
 const versionCache = new Map<string, string | null>()

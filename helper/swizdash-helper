@@ -188,7 +188,7 @@ cmd_job() {
 # the install and remove scripts box has, /etc/swizzin is readable by root only
 cmd_scripts() {
     local kind
-    for kind in install remove; do
+    for kind in install remove upgrade; do
         find "/usr/local/bin/swizzin/${kind}/" -maxdepth 1 -name '*.sh' -printf '%f\n' 2> /dev/null | sed 's/\.sh$//' |
             jq -Rsc --arg k "$kind" '{($k): (split("\n") | map(select(. != "")))}'
     done | jq -sc 'add'

@@ -7,7 +7,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { uptime } from 'node:os'
 import { config } from './config.ts'
 import { allowedUnit, appInfo, catalog, catalogApp, forgetVersion, listApps, swizzinUsers } from './apps.ts'
-import { bandwidth, cpuHealth, listJobs, platform, raid, readJob, softwareUpdates, updates } from './extra.ts'
+import { appUpdates, bandwidth, cpuHealth, listJobs, platform, raid, readJob, softwareUpdates, updates } from './extra.ts'
 import { helper, helperJson, HelperError } from './helper.ts'
 import { clearHistory, history, historyStats, startHistory } from './history.ts'
 import { cpuFreqMhz, cpuInfo, cpuTemp, disks, live, osInfo, sensors, startSampler } from './system.ts'
@@ -129,6 +129,7 @@ route('GET', '/api/bandwidth', bandwidth)
 route('GET', '/api/updates', updates)
 // apart from the apt list: it waits on GitHub, the page must not
 route('GET', '/api/updates/software', () => softwareUpdates(version))
+route('GET', '/api/updates/apps', () => appUpdates())
 route('GET', '/api/system/hardware', async () => {
   const [p, s, r, h] = await Promise.all([platform(), sensors(), raid(), cpuHealth()])
   return { platform: p, sensors: s, raid: r, health: h }

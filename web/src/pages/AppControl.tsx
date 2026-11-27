@@ -1,9 +1,9 @@
 import { Fragment, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronRight, Copy, Eye, EyeOff, ExternalLink, Play, RotateCw, Square } from 'lucide-react'
-import { get, post, type AppInfo, type AppRow } from '@/lib/api'
+import { get, post, type AppInfo, type AppRow, type AppUpdate } from '@/lib/api'
 import { appUrl } from '@/lib/apps'
-import { useApps } from '@/lib/queries'
+import { useAppUpdates, useApps } from '@/lib/queries'
 import { cn } from '@/lib/format'
 import { AppIcon } from '@/components/AppIcon'
 import { Badge, Button, Card, Empty, ErrorNote, Pager, Segmented, Spinner } from '@/components/ui'
@@ -19,7 +19,7 @@ function useServiceAction(id: string) {
   })
 }
 
-function CopyButton({ text, label }: { text: string; label: string }) {
+export function CopyButton({ text, label }: { text: string; label: string }) {
   const [done, setDone] = useState(false)
   return (
     <Button
@@ -141,7 +141,7 @@ function Details({ app, svc }: { app: AppRow; svc: ReturnType<typeof useServiceA
   )
 }
 
-function Row({ app, open, onToggle }: { app: AppRow; open: boolean; onToggle: () => void }) {
+function Row({ app, update, open, onToggle }: { app: AppRow; update?: AppUpdate; open: boolean; onToggle: () => void }) {
   const svc = useServiceAction(app.id)
   const url = appUrl(app)
   const hasUnits = app.units.length > 0
@@ -158,7 +158,15 @@ function Row({ app, open, onToggle }: { app: AppRow; open: boolean; onToggle: ()
           <div className="flex items-center gap-3">
             <AppIcon name={app.name} category={app.category} />
             <div className="min-w-0">
-              <p className="truncate font-semibold">{app.name}</p>
+              <p className="flex items-center gap-2 font-semibold">
+                <span className="truncate">{app.name}</span>
+                {/* the version column, which has the full badge, is hidden on small screens */}
+                {update?.state === 'update' && (
+                  <Badge tone="blue" className="md:hidden">
+                    update
+                  </Badge>
+                )}
+              </p>
               <p className="truncate text-xs text-muted">{app.category}</p>
             </div>
           </div>
@@ -166,7 +174,14 @@ function Row({ app, open, onToggle }: { app: AppRow; open: boolean; onToggle: ()
         <td className="px-3">
           <Badge tone={statusTone[app.status]}>{statusLabel[app.status]}</Badge>
         </td>
-        <td className="hidden px-3 font-mono text-xs md:table-cell">{app.version ?? <span className="text-muted">—</span>}</td>
+        <td className="hidden px-3 font-mono text-xs md:table-cell">
+          {app.version ?? <span className="text-muted">—</span>}
+          {update?.state === 'update' && (
+            <Badge tone="blue" className="ml-2 font-sans">
+              {update.available} available
+            </Badge>
+          )}
+        </td>
         <td className="hidden px-3 font-mono text-xs text-muted lg:table-cell">{app.port ?? '—'}</td>
         <td className="pr-4">
           <div className="flex justify-end gap-1">
@@ -226,6 +241,8 @@ function Row({ app, open, onToggle }: { app: AppRow; open: boolean; onToggle: ()
 
 export function AppControl() {
   const q = useApps()
+  const updates = useAppUpdates()
+  const updateOf = useMemo(() => new Map((updates.data ?? []).map((u) => [u.id, u])), [updates.data])
   const [filter, setFilter] = useState<Filter>('all')
   const [open, setOpen] = useState<string | null>(null)
   const [page, setPage] = useState(1)
@@ -277,7 +294,7 @@ export function AppControl() {
               </thead>
               <tbody>
                 {shown.map((a) => (
-                  <Row key={a.id} app={a} open={open === a.id} onToggle={() => setOpen(open === a.id ? null : a.id)} />
+                  <Row key={a.id} app={a} update={updateOf.get(a.id)} open={open === a.id} onToggle={() => setOpen(open === a.id ? null : a.id)} />
                 ))}
               </tbody>
             </table>

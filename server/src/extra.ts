@@ -3,7 +3,21 @@ import { join } from 'node:path'
 import { config } from './config.ts'
 import { defaultIface } from './system.ts'
 import { cached, keyed, readText, run } from './util.ts'
-import { compareVersions, jobResult, offlineCpus, parseAptList, parseCpuList, parseLsRemote, parseMdstat, parseMicrocode, throttleTotals } from './parse.ts'
+import { appVersion, boxScripts, catalog, installedIds, type CatalogApp } from './apps.ts'
+import {
+  compareVersions,
+  jobResult,
+  offlineCpus,
+  parseAptList,
+  parseAptPolicy,
+  parseCpuList,
+  parseLsRemote,
+  parseMdstat,
+  parseMicrocode,
+  releaseTag,
+  throttleTotals,
+  versionNumber,
+} from './parse.ts'
 
 // ---------- bandwidth (vnStat) ----------
 
@@ -48,7 +62,6 @@ export const updates = cached(30 * 60_000, async () => {
 // ---------- swizzin and swizdash ----------
 
 const swizzinDir = '/etc/swizzin'
-// GitHub allows 60 unauthenticated API calls an hour per address, often shared on seedbox hosts:
 // a good answer is kept a few hours, a failure 10 minutes so a dead network does not slow every visit
 const remoteTtl = (v: unknown) => (v ? 3 * 3600_000 : 10 * 60_000)
 const remoteTimeout = 8_000
@@ -80,17 +93,34 @@ const remoteHead = keyed(remoteTtl, async (key) => {
   return hash ? { hash, at: Date.now() } : null
 })
 
-const latestRelease = cached(remoteTtl, async () => {
+/**
+ * the tag of a repository's latest release, read where github.com/<repo>/releases/latest redirects to, as
+ * swizzin's github_latest_version does. The GitHub API allows 60 calls an hour per address without an account,
+ * often shared on seedbox hosts; the web site's limits are far looser. null: no release, or GitHub out of reach.
+ */
+async function latestReleaseTag(repo: string): Promise<string | null> {
+  let url = `https://github.com/${repo}/releases/latest`
   try {
-    const res = await fetch(`https://api.github.com/repos/${swizdashRepo}/releases/latest`, {
-      headers: { accept: 'application/vnd.github+json', 'user-agent': 'swizdash' },
-      signal: AbortSignal.timeout(remoteTimeout),
-    })
-    const tag = res.ok ? ((await res.json()) as { tag_name?: unknown }).tag_name : null
-    return typeof tag === 'string' ? { version: tag.replace(/^v/, ''), at: Date.now() } : null
+    // a renamed repository first redirects to its new name's releases/latest: followed twice at most
+    for (let hop = 0; hop < 3; hop++) {
+      const res = await fetch(url, { method: 'HEAD', redirect: 'manual', headers: { 'user-agent': 'swizdash' }, signal: AbortSignal.timeout(remoteTimeout) })
+      const location = res.headers.get('location')
+      const tag = releaseTag(location)
+      if (tag || !location) return tag
+      const next = new URL(location, url)
+      if (next.origin !== 'https://github.com' || !next.pathname.endsWith('/releases/latest')) return null
+      url = next.href
+    }
+    return null
   } catch {
     return null
   }
+}
+
+const latestRelease = cached(remoteTtl, async () => {
+  const tag = await latestReleaseTag(swizdashRepo)
+  const version = tag ? versionNumber(tag) : null
+  return version ? { version, at: Date.now() } : null
 })
 
 const exists = (p: string) =>
@@ -147,6 +177,84 @@ async function swizdashUpdate(version: string): Promise<SoftwareUpdate> {
 
 export function softwareUpdates(version: string): Promise<SoftwareUpdate[]> {
   return Promise.all([swizzinUpdate(), swizdashUpdate(version)])
+}
+
+// ---------- installed apps ----------
+
+export interface AppUpdate {
+  id: string
+  name: string
+  source: 'apt' | 'github'
+  /** null: the installed version could not be read */
+  installed: string | null
+  /** null: the check failed (offline, rate limit, no release) */
+  available: string | null
+  state: 'current' | 'update' | 'unknown'
+  checkedAt: number | null
+  /** null: box has no upgrade script for it */
+  command: string | null
+}
+
+// a release is checked every 6 hours, a failure again after 15 minutes
+const releaseTtl = (v: unknown) => (v ? 6 * 3600_000 : 15 * 60_000)
+
+// key: owner/repo, from the catalog only
+const githubRelease = keyed(releaseTtl, async (repo) => {
+  const tag = await latestReleaseTag(repo)
+  const version = tag ? versionNumber(tag) : null
+  return version ? { version, at: Date.now() } : null
+})
+
+// apt's own lists, refreshed by the system: no network here
+const aptPolicy = keyed(30 * 60_000, async (pkg) => {
+  const r = await run('apt-cache', ['policy', '--', pkg], 15_000)
+  const p = parseAptPolicy(r.stdout)
+  // a pin can make apt's candidate older than what is installed: only a newer one is an update
+  const newer = p.installed && p.candidate ? (await run('dpkg', ['--compare-versions', p.candidate, 'gt', p.installed])).ok : false
+  return { ...p, newer, at: Date.now() }
+})
+
+async function appUpdate(app: CatalogApp, upgrade: Set<string>): Promise<AppUpdate | null> {
+  const row = { id: app.id, name: app.name }
+  const pkg = app.latest?.apt ?? app.version?.dpkg
+  // without a way to read the installed version there is nothing to compare: not shown, rather than never checked
+  if (app.latest?.github && app.version) {
+    const [probe, release] = await Promise.all([appVersion(app.id).catch(() => null), githubRelease(app.latest.github)])
+    const installed = probe ? versionNumber(probe) : null
+    const cmp = installed && release ? compareVersions(release.version, installed) : null
+    return {
+      ...row,
+      source: 'github',
+      installed,
+      available: release?.version ?? null,
+      state: cmp == null ? 'unknown' : cmp > 0 ? 'update' : 'current',
+      checkedAt: release?.at ?? null,
+      command: upgrade.has(app.id) ? `box upgrade ${app.id}` : null,
+    }
+  }
+  if (pkg && !app.latest?.github) {
+    const p = await aptPolicy(pkg)
+    return {
+      ...row,
+      source: 'apt',
+      installed: p.installed,
+      available: p.candidate,
+      state: !p.installed || !p.candidate ? 'unknown' : p.newer ? 'update' : 'current',
+      checkedAt: p.at,
+      command: `apt-get install --only-upgrade ${pkg}`,
+    }
+  }
+  return null
+}
+
+/** installed apps whose newest version can be known, against what is installed */
+export async function appUpdates(): Promise<AppUpdate[]> {
+  // without the helper, only the box upgrade commands are missing
+  const [installed, scripts] = await Promise.all([installedIds(), boxScripts().catch(() => ({ upgrade: new Set<string>() }))])
+  // swizdash has its own row, next to swizzin
+  const apps = catalog.apps.filter((a) => installed.has(a.id) && a.id !== 'swizdash')
+  const rows = await Promise.all(apps.map((a) => appUpdate(a, scripts.upgrade)))
+  return rows.filter((r): r is AppUpdate => r !== null)
 }
 
 // ---------- RAID ----------

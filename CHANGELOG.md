@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Installed apps say when a newer version exists, and how to update them: an Updates tab next to Application control and Package management (apps to update, all checked apps, those that could not be checked, with the command to copy), a badge next to the version in Apps, and an Apps section in System updates. On phones the tabs read Control, Packages and Updates. Apps installed with apt are checked against apt's candidate, without the network. Apps downloaded from GitHub are checked against their latest release, every 6 hours at most, and again after 15 minutes when GitHub could not be reached. The command is `box upgrade <app>` when swizzin has one, `apt-get install --only-upgrade <package>` for apt.
+- Latest releases, for the apps and swizdash itself, are read where `github.com/<repo>/releases/latest` redirects to, as swizzin does, instead of the GitHub API: the API allows 60 calls an hour per address without an account, often shared on seedbox hosts.
+- The installed version of SABnzbd, qui and autobrr shows again: SABnzbd is no git checkout, qui and autobrr are in `/usr/bin`.
+
 ## 0.1.3
 
 - System updates also say whether swizzin and swizdash are up to date, and how to update them: swizzin against the branch `box update` follows on the remote of `/etc/swizzin`, swizdash against its latest release on GitHub. The server checks at most every 3 hours, apart from the rest of the page. Offline or over the GitHub limit, it says "could not check" and tries again 10 minutes later. An `/etc/swizzin` that `box update` leaves alone (a link, or a `.dev.lock` file) is "managed manually".
