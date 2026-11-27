@@ -19,7 +19,7 @@ function useServiceAction(id: string) {
   })
 }
 
-function CopyButton({ text, label }: { text: string; label: string }) {
+export function CopyButton({ text, label }: { text: string; label: string }) {
   const [done, setDone] = useState(false)
   return (
     <Button

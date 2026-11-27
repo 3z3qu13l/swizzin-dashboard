@@ -200,7 +200,7 @@ function Software() {
 }
 
 /** installed apps against apt's candidate or the project's latest release; only updates are listed */
-function AppUpdates() {
+function AppUpdatesSection() {
   const q = useAppUpdates()
   const rows = q.data ?? []
   const pending = rows.filter((r) => r.state === 'update')
@@ -265,7 +265,7 @@ function Updates() {
         }
       />
       <Software />
-      <AppUpdates />
+      <AppUpdatesSection />
       <div className="border-t border-line px-5 pt-3">
         <SubHead title="System packages" checked={q.data ? `Checked ${ago(serverTime(q.data.checkedAt))}` : undefined} />
       </div>
