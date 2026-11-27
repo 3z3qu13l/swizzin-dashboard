@@ -19,7 +19,7 @@
       "id": "airsonic",
       "name": "Airsonic",
       "category": "Media Servers",
-      "desc": "Web-based music streaming server",
+      "desc": "Music server, archived upstream: no longer installed, Navidrome replaces it",
       "units": ["airsonic"],
       "web": "/airsonic/",
       "paths": {
@@ -343,6 +343,26 @@
       },
       "latest": {
         "github": "Kareadita/Kavita"
+      }
+    },
+    {
+      "id": "komga",
+      "name": "Komga",
+      "category": "Readers",
+      "desc": "Server and web reader for comics, manga and books",
+      "units": ["komga"],
+      "web": "/komga/",
+      "paths": {
+        "config": "/home/{user}/.config/komga/application.yml",
+        "data": "/home/{user}/.config/komga",
+        "log": "/home/{user}/.config/komga/logs",
+        "install": "/opt/komga"
+      },
+      "version": {
+        "file": "/opt/komga/.swizzin-version"
+      },
+      "latest": {
+        "github": "gotson/komga"
       }
     },
     {
