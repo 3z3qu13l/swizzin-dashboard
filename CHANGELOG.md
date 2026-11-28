@@ -11,6 +11,7 @@
   - Updates: swizzin and swizdash, the system packages and the apps, in one place.
   - Downloads: a page of its own instead of the side panel. Tiles for each status and the list of clients filter the torrents, kept in the address. Each client shows its folder, size and share done. Traffic per day is below.
   - Old links to `/?mode=packages` and `/?mode=updates` open the matching Apps filter.
+- Homepage leaves the catalog: swizzin no longer installs it, swizdash replaces it.
 
 ## 0.1.8
 
