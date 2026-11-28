@@ -27,7 +27,7 @@ export function Packages() {
   return (
     <Card>
       <div className="flex flex-wrap items-center gap-3 px-5 py-4">
-        <SearchInput value={text} onChange={(v) => (setText(v), reset())} label="Find a package" className="w-56" />
+        <SearchInput value={text} onChange={(v) => (setText(v), reset())} label="Find a package" className="w-56 shrink-0" />
         <select
           value={cat}
           onChange={(e) => (setCat(e.target.value), reset())}

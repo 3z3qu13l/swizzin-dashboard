@@ -311,7 +311,6 @@ export function SearchInput({ value, onChange, label, className }: { value: stri
 export function ConfirmActions({
   error,
   busy,
-  disabled,
   label,
   variant = 'danger',
   onCancel,
@@ -319,7 +318,6 @@ export function ConfirmActions({
 }: {
   error: Error | null
   busy: boolean
-  disabled?: boolean
   label: string
   variant?: 'primary' | 'danger'
   onCancel: () => void
@@ -332,7 +330,7 @@ export function ConfirmActions({
         <Button variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
-        <Button variant={variant} disabled={disabled} busy={busy} onClick={onConfirm}>
+        <Button variant={variant} busy={busy} onClick={onConfirm}>
           {label}
         </Button>
       </div>

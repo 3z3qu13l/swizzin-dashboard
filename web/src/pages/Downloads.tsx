@@ -41,15 +41,6 @@ export function Downloads() {
   const client = params.get('client')
   const severalUsers = new Set(list.map((d) => d.user)).size > 1
 
-  // the tiles and the clients both filter the list, kept in the address so it survives a reload
-  const filter = (k: 'status' | 'client', v: string | null) => {
-    const next = new URLSearchParams(params)
-    if (v === null || next.get(k) === v) next.delete(k)
-    else next.set(k, v)
-    setParams(next, { replace: true })
-    reset()
-  }
-
   const picked = client ? list.filter((d) => downloadKey(d) === client) : list
   const total = (st: TorrentStatus) => picked.reduce((a, d) => a + d.counts[st], 0)
   const down = picked.reduce((a, d) => a + d.down, 0)
@@ -62,6 +53,16 @@ export function Downloads() {
       .filter((i) => (!status || i.status === status) && (!t || i.name.toLowerCase().includes(t)))
   }, [list, client, status, text])
   const { shown, pager, reset } = usePaged(rows)
+
+  // the tiles and the clients both filter the list, kept in the address so it survives a reload
+  const filter = (k: 'status' | 'client', v: string | null) => {
+    const next = new URLSearchParams(params)
+    if (v === null || next.get(k) === v) next.delete(k)
+    else next.set(k, v)
+    setParams(next, { replace: true })
+    reset()
+  }
+
   const detail: Record<string, string> = {
     downloading: `↓ ${rate(down)}`,
     seeding: `↑ ${rate(up)}`,
