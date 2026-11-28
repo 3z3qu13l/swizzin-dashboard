@@ -2,62 +2,144 @@
 @import '@fontsource-variable/manrope';
 @import '@fontsource-variable/jetbrains-mono';
 
-/* Three themes: night (default), dusk (softer slate) and day (light). */
+/* Five themes, each a backdrop of soft color (--b1 to --b4) under frosted glass panels.
+   Aurore is the default. --surface, --surface-2 and --line stay opaque: the charts read them. */
 :root,
-[data-theme='night'] {
-  --bg: #08101f;
-  --bg-glow: #0d1a33;
-  --surface: #0f1a2e;
-  --surface-2: #15223b;
+[data-theme='aurore'] {
+  --bg: #050b18;
+  --surface: #0e182c;
+  --surface-2: #16233d;
   --line: #22314f;
-  --text: #e5ecf8;
-  --muted: #8796b4;
-  --accent: #3ccf91;
-  --accent-ink: #052016;
-  --warn: #f2b84b;
-  --danger: #f0616d;
-  --info: #6f8dff;
-  --cpu: #6f8dff;
-  --mem: #b48cff;
-  --disk: #3ccf91;
+  --text: #e6efff;
+  --muted: #8ea3c4;
+  --accent: #3ddc97;
+  --accent-ink: #03140c;
+  --warn: #f5c056;
+  --danger: #ff6b7a;
+  --info: #7aa2ff;
+  --cpu: #7aa2ff;
+  --mem: #c19bff;
+  --disk: #3ddc97;
   --swap: #f29b4b;
+  --b1: #0f766e;
+  --b2: #1d4ed8;
+  --b3: #15803d;
+  --b4: #4338ca;
+  /* light edge along the top of each glass panel */
+  --hi: rgb(255 255 255 / 0.07);
+  --glass-alpha: 0.45;
+  --glass-blur: 18px;
   /* lightness of the app monograms, readable on each background */
   --icon-l: 0.8;
   color-scheme: dark;
 }
 
-[data-theme='dusk'] {
-  --bg: #161b26;
-  --bg-glow: #1d2433;
-  --surface: #1e2533;
-  --surface-2: #262f40;
-  --line: #343e52;
-  --text: #e8ebf1;
-  --muted: #98a2b6;
-  --accent: #5fd3a0;
-  --accent-ink: #0b2219;
+[data-theme='givre'] {
+  --bg: #dfe7f1;
+  --surface: #ffffff;
+  --surface-2: #eef2f8;
+  --line: #cfd8e6;
+  --text: #0e1a2b;
+  --muted: #55657e;
+  --accent: #0b7550;
+  --accent-ink: #ffffff;
+  --warn: #a86a12;
+  --danger: #c9303e;
+  --info: #3459d6;
+  --cpu: #3459d6;
+  --mem: #7a48d0;
+  --disk: #0b7550;
+  --swap: #c46a1a;
+  --b1: #8fb8ff;
+  --b2: #ffc9d6;
+  --b3: #b9efe0;
+  --b4: #d9c8ff;
+  --hi: rgb(255 255 255 / 0.7);
+  --glass-alpha: 0.55;
+  --glass-blur: 20px;
+  --icon-l: 0.45;
+  color-scheme: light;
+}
+
+[data-theme='crepuscule'] {
+  --bg: #1a0e22;
+  --surface: #22102a;
+  --surface-2: #2e1a38;
+  --line: #44294f;
+  --text: #fcefe8;
+  --muted: #dcc2d0;
+  --accent: #ffb35c;
+  --accent-ink: #2a1300;
+  --warn: #ffe27a;
+  --danger: #ff5d73;
+  --info: #9db4ff;
+  --cpu: #ff8fa3;
+  --mem: #c9a0ff;
+  --disk: #ffb35c;
+  --swap: #f29b4b;
+  --b1: #ff6b4a;
+  --b2: #9d4edd;
+  --b3: #f59e0b;
+  --b4: #be185d;
+  --hi: rgb(255 240 230 / 0.08);
+  --glass-alpha: 0.4;
+  --glass-blur: 22px;
+  --icon-l: 0.8;
   color-scheme: dark;
 }
 
-[data-theme='day'] {
-  --bg: #f3f6fb;
-  --bg-glow: #e9eef8;
-  --surface: #ffffff;
-  --surface-2: #f1f4f9;
-  --line: #d9e1ee;
-  --text: #0f1a2e;
-  --muted: #5a6985;
-  --accent: #14965f;
-  --accent-ink: #ffffff;
-  --warn: #b7791f;
-  --danger: #d23a48;
-  --info: #3d5fe0;
-  --cpu: #3d5fe0;
-  --mem: #8250df;
-  --disk: #14965f;
-  --swap: #c46a1a;
-  --icon-l: 0.48;
-  color-scheme: light;
+[data-theme='abysse'] {
+  --bg: #021218;
+  --surface: #04202a;
+  --surface-2: #082c38;
+  --line: #134552;
+  --text: #dffaff;
+  --muted: #84b1bb;
+  --accent: #3ee6f2;
+  --accent-ink: #01262b;
+  --warn: #fcd34d;
+  --danger: #fb7185;
+  --info: #a5b4fc;
+  --cpu: #5eead4;
+  --mem: #a5b4fc;
+  --disk: #3ee6f2;
+  --swap: #fdba74;
+  --b1: #0891b2;
+  --b2: #0e7490;
+  --b3: #134e4a;
+  --b4: #1e3a8a;
+  --hi: rgb(200 250 255 / 0.07);
+  --glass-alpha: 0.45;
+  --glass-blur: 16px;
+  --icon-l: 0.8;
+  color-scheme: dark;
+}
+
+[data-theme='ardoise'] {
+  --bg: #15171b;
+  --surface: #1e2127;
+  --surface-2: #272b33;
+  --line: #343943;
+  --text: #eceef2;
+  --muted: #9aa0ab;
+  --accent: #8ab4ff;
+  --accent-ink: #0b1630;
+  --warn: #f2c46d;
+  --danger: #f2777f;
+  --info: #8ab4ff;
+  --cpu: #8ab4ff;
+  --mem: #d0a2ff;
+  --disk: #6fd3a0;
+  --swap: #f29b4b;
+  --b1: #2b3140;
+  --b2: #3a3f4b;
+  --b3: #262a33;
+  --b4: #343a48;
+  --hi: rgb(255 255 255 / 0.05);
+  --glass-alpha: 0.85;
+  --glass-blur: 8px;
+  --icon-l: 0.8;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -87,12 +169,51 @@ body,
 }
 
 body {
-  background: radial-gradient(1200px 600px at 85% -10%, var(--bg-glow), transparent 60%), var(--bg);
-  background-attachment: fixed;
+  background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
   font-feature-settings: 'tnum' 1;
   -webkit-font-smoothing: antialiased;
+}
+
+/* the colored backdrop the glass panels blur */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(55vmax 55vmax at 5% -5%, color-mix(in oklab, var(--b1) 75%, transparent), transparent 70%),
+    radial-gradient(45vmax 45vmax at 100% 20%, color-mix(in oklab, var(--b2) 60%, transparent), transparent 70%),
+    radial-gradient(40vmax 40vmax at 45% 110%, color-mix(in oklab, var(--b3) 50%, transparent), transparent 70%),
+    radial-gradient(30vmax 30vmax at 85% 95%, color-mix(in oklab, var(--b4) 45%, transparent), transparent 70%), var(--bg);
+}
+
+/* translucent panel; the backdrop behind cards is smooth gradients, which blurring would not change */
+@utility glass {
+  background: color-mix(in oklab, var(--surface) calc(var(--glass-alpha) * 100%), transparent);
+  border-color: var(--line);
+  box-shadow:
+    inset 0 1px 0 var(--hi),
+    0 10px 30px -12px rgb(0 0 0 / 0.35);
+}
+
+/* frosted, where the page scrolls underneath: the header and the menu */
+@utility frost {
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+}
+
+/* the system setting "reduce transparency": plain panels */
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background: var(--surface);
+  }
+  .frost {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 :focus-visible {

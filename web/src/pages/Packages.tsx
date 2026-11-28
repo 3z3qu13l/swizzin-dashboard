@@ -1,16 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Download, Info, MoreHorizontal, Search, Trash2 } from 'lucide-react'
-import { post, serverTime, type AppRow } from '@/lib/api'
+import { Download, Search } from 'lucide-react'
+import { post, type AppRow } from '@/lib/api'
 import { useApps, useJobs, useMeta } from '@/lib/queries'
-import { ago } from '@/lib/format'
 import { AppIcon } from '@/components/AppIcon'
 import { JobDialog } from '@/components/JobDialog'
-import { Badge, Button, Card, Dialog, Empty, ErrorNote, Menu, MenuItem, Pager, Segmented, Spinner } from '@/components/ui'
+import { Button, Card, Dialog, Empty, ErrorNote, Pager, Spinner } from '@/components/ui'
 
-type Show = 'all' | 'installed' | 'available'
-
-function Confirm({
+export function Confirm({
   app,
   kind,
   onClose,
@@ -55,12 +52,12 @@ function Confirm({
   )
 }
 
+/** apps box can install; the installed ones are managed in the main list */
 export function Packages() {
   const q = useApps()
   const meta = useMeta()
   const jobs = useJobs()
   const [cat, setCat] = useState('all')
-  const [show, setShow] = useState<Show>('all')
   const [text, setText] = useState('')
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(20)
@@ -68,12 +65,9 @@ export function Packages() {
   const [job, setJob] = useState<{ id: string; name: string } | null>(null)
 
   const running = jobs.data?.find((j) => j.state === 'running')
-  const all = useMemo(() => (q.data?.apps ?? []).filter((a) => a.hasScripts.install || a.installed), [q.data])
+  const all = useMemo(() => (q.data?.apps ?? []).filter((a) => a.hasScripts.install), [q.data])
   const rows = all.filter(
-    (a) =>
-      (cat === 'all' || a.category === cat) &&
-      (show === 'all' || (show === 'installed' ? a.installed : !a.installed)) &&
-      (!text.trim() || `${a.name} ${a.desc}`.toLowerCase().includes(text.trim().toLowerCase())),
+    (a) => (cat === 'all' || a.category === cat) && !a.installed && (!text.trim() || `${a.name} ${a.desc}`.toLowerCase().includes(text.trim().toLowerCase())),
   )
   const pages = Math.max(1, Math.ceil(rows.length / perPage))
   // the list shrinks when apps change state: never stay on a page past the end
@@ -107,27 +101,8 @@ export function Packages() {
             </option>
           ))}
         </select>
-        <Segmented
-          value={show}
-          onChange={(v) => (setShow(v), reset())}
-          options={[
-            { value: 'all', label: 'All' },
-            { value: 'installed', label: 'Installed' },
-            { value: 'available', label: 'Not installed' },
-          ]}
-        />
-        <span className="ml-auto text-xs text-muted">{rows.length} packages</span>
+        <span className="ml-auto text-xs text-muted">{rows.length} available</span>
       </div>
-
-      {running && (
-        <button
-          onClick={() => setJob({ id: running.id, name: running.app })}
-          className="mx-5 mb-3 flex w-[calc(100%-2.5rem)] items-center gap-3 rounded-lg border border-info/30 bg-info/10 px-4 py-2.5 text-left text-sm"
-        >
-          <span className="size-2 animate-pulse rounded-full bg-info" />
-          box is {running.kind === 'install' ? 'installing' : 'removing'} {running.app}, started {ago(serverTime(running.startedAt))}. Show progress
-        </button>
-      )}
 
       {q.isPending ? (
         <Spinner />
@@ -146,26 +121,8 @@ export function Packages() {
                   <p className="text-sm text-muted">{a.desc}</p>
                 </div>
                 <span className="hidden text-xs text-muted sm:inline">{a.category}</span>
-                {a.installed ? <Badge tone="green">Installed</Badge> : <Badge>Not installed</Badge>}
                 <div className="flex w-32 justify-end">
-                  {a.installed ? (
-                    <Menu
-                      trigger={
-                        <Button size="sm" variant="outline">
-                          <MoreHorizontal className="size-4" /> Actions
-                        </Button>
-                      }
-                    >
-                      <MenuItem danger disabled={!a.canRemove || !!running} onSelect={() => setConfirm({ app: a, kind: 'remove' })}>
-                        <Trash2 className="size-4" /> Remove
-                      </MenuItem>
-                      {a.note && (
-                        <p className="flex max-w-60 gap-2 px-2.5 py-1.5 text-xs text-muted">
-                          <Info className="mt-0.5 size-3.5 shrink-0" /> {a.note}
-                        </p>
-                      )}
-                    </Menu>
-                  ) : a.canInstall ? (
+                  {a.canInstall ? (
                     <Button size="sm" variant="primary" disabled={!!running} onClick={() => setConfirm({ app: a, kind: 'install' })}>
                       <Download className="size-4" /> Install
                     </Button>
@@ -175,7 +132,7 @@ export function Packages() {
                     </span>
                   )}
                 </div>
-                {!a.installed && a.note && <p className="w-full pl-13 text-xs text-muted">{a.note}</p>}
+                {a.note && <p className="w-full pl-13 text-xs text-muted">{a.note}</p>}
               </li>
             ))}
           </ul>

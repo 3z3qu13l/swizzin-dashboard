@@ -1,32 +1,28 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router'
-import { ChevronDown, Cpu, ExternalLink, LayoutGrid, Menu as MenuIcon, MemoryStick, Network, Palette, Search, Server, X } from 'lucide-react'
-import { useApps, useLive, useMeta } from '@/lib/queries'
+import {
+  ChevronDown,
+  CircleArrowUp,
+  Cpu,
+  Download,
+  ExternalLink,
+  House,
+  LayoutGrid,
+  Menu as MenuIcon,
+  MemoryStick,
+  Network,
+  Search,
+  Server,
+  X,
+} from 'lucide-react'
+import { useApps, useDownloads, useLive, useMeta } from '@/lib/queries'
+import { useAttention } from '@/lib/attention'
 import { appUrl } from '@/lib/apps'
 import { cn, pct, rate } from '@/lib/format'
 import { Spark } from './charts'
 import { useThemeColors } from '@/lib/hooks'
-import { Menu, MenuItem, StatusDot } from './ui'
-
-const themes = [
-  { id: 'night', label: 'Night' },
-  { id: 'dusk', label: 'Dusk' },
-  { id: 'day', label: 'Day' },
-]
-
-function useTheme(): [string, (t: string) => void] {
-  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme ?? 'night')
-  const set = (t: string) => {
-    document.documentElement.dataset.theme = t
-    try {
-      localStorage.setItem('swizdash-theme', t)
-    } catch {
-      // private window
-    }
-    setTheme(t)
-  }
-  return [theme, set]
-}
+import { StatusDot } from './ui'
+import { ThemePicker } from './ThemePicker'
 
 function LiveStrip() {
   const { live, trail } = useLive()
@@ -43,7 +39,10 @@ function LiveStrip() {
           <i.icon className="size-4 text-muted" aria-hidden />
           <span className="sr-only">{i.label}</span>
           <span className="w-[5.5rem] text-sm font-semibold whitespace-nowrap">{i.value}</span>
-          <Spark values={i.values} color={i.color} max={i.max} />
+          {/* the trend lines need the width of a large screen: with them, the header overflows below 1280px */}
+          <span className="hidden xl:contents">
+            <Spark values={i.values} color={i.color} max={i.max} />
+          </span>
         </div>
       ))}
     </div>
@@ -59,7 +58,7 @@ function Software({ onNavigate }: { onNavigate: () => void }) {
   if (!groups.length) return null
   return (
     <div className="mt-6">
-      <p className="px-3 pb-2 text-xs font-semibold text-muted">Software</p>
+      <p className="px-3 pb-2 text-xs font-semibold text-muted">Open</p>
       {groups.map((g) => {
         const isOpen = open[g.cat] ?? true
         return (
@@ -114,7 +113,7 @@ function SearchBox() {
   const [q, setQ] = useState('')
   const hits = q.trim() ? (apps.data?.apps ?? []).filter((a) => a.installed && a.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 6) : []
   return (
-    <div className="relative w-full max-w-sm">
+    <div className="relative w-full max-w-sm min-w-0">
       <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
       <input
         value={q}
@@ -178,8 +177,24 @@ export function Shell({ children }: { children: ReactNode }) {
   }
   const openNav = useRef<HTMLButtonElement>(null)
   const closeNav = useRef<HTMLButtonElement>(null)
-  const [theme, setTheme] = useTheme()
   const meta = useMeta()
+  const attention = useAttention()
+  const downloads = useDownloads()
+  const active = (downloads.data ?? []).reduce((a, d) => a + d.active, 0)
+  const pages = [
+    { to: '/', label: 'Home', icon: House, count: 0, tone: '', what: '' },
+    { to: '/system', label: 'System', icon: Server, count: 0, tone: '', what: '' },
+    {
+      to: attention.failed.length ? '/apps?show=stopped' : '/apps',
+      label: 'Apps',
+      icon: LayoutGrid,
+      count: attention.failed.length,
+      tone: 'bg-danger/15 text-danger',
+      what: 'failed',
+    },
+    { to: '/updates', label: 'Updates', icon: CircleArrowUp, count: attention.updates, tone: 'bg-warn/15 text-warn', what: 'pending' },
+    { to: '/downloads', label: 'Downloads', icon: Download, count: active, tone: 'bg-surface-2 text-muted', what: 'active' },
+  ]
   const link = ({ isActive }: { isActive: boolean }) =>
     cn(
       'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
@@ -209,7 +224,7 @@ export function Shell({ children }: { children: ReactNode }) {
         // closed off screen, the drawer also leaves the keyboard order and screen readers
         inert={!nav && !wide}
         className={cn(
-          'fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-line bg-surface/95 backdrop-blur transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0',
+          'glass frost fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0',
           nav ? 'translate-x-0' : '-translate-x-full',
         )}
       >
@@ -221,12 +236,17 @@ export function Shell({ children }: { children: ReactNode }) {
           </button>
         </div>
         <nav className="flex-1 overflow-y-auto px-3 pb-6">
-          <NavLink to="/" end className={link} onClick={() => setNav(false)}>
-            <LayoutGrid className="size-4" /> App Dashboard
-          </NavLink>
-          <NavLink to="/system" className={link} onClick={() => setNav(false)}>
-            <Server className="size-4" /> System Dashboard
-          </NavLink>
+          {pages.map((p) => (
+            <NavLink key={p.to} to={p.to} end={p.to === '/'} className={link} onClick={() => setNav(false)}>
+              <p.icon className="size-4" /> {p.label}
+              {p.count ? (
+                <span className={cn('ml-auto rounded-md px-1.5 text-xs font-semibold', p.tone)}>
+                  {p.count}
+                  <span className="sr-only"> {p.what}</span>
+                </span>
+              ) : null}
+            </NavLink>
+          ))}
           <Software onNavigate={() => setNav(false)} />
         </nav>
         <p className="border-t border-line px-5 py-3 text-xs text-muted">
@@ -236,27 +256,14 @@ export function Shell({ children }: { children: ReactNode }) {
       {nav && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setNav(false)} />}
 
       <div className="min-w-0 flex-1" inert={drawer}>
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-line bg-bg/80 px-4 backdrop-blur sm:px-6">
+        <header className="glass frost sticky top-0 z-20 flex h-16 items-center gap-4 border-b px-4 sm:px-6">
           <button ref={openNav} className="lg:hidden" onClick={() => setNav(true)} aria-label="Open menu" aria-expanded={nav} aria-controls="sidebar">
             <MenuIcon className="size-5" />
           </button>
           <SearchBox />
           <div className="ml-auto flex items-center gap-4">
             <LiveStrip />
-            <Menu
-              trigger={
-                <button className="grid size-9 place-items-center rounded-lg border border-line text-muted hover:text-text" aria-label="Theme">
-                  <Palette className="size-4" />
-                </button>
-              }
-            >
-              {themes.map((t) => (
-                <MenuItem key={t.id} onSelect={() => setTheme(t.id)}>
-                  <span className={cn('size-2 rounded-full', theme === t.id ? 'bg-accent' : 'bg-transparent')} />
-                  {t.label}
-                </MenuItem>
-              ))}
-            </Menu>
+            <ThemePicker />
           </div>
         </header>
         <main className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:py-8">{children}</main>
