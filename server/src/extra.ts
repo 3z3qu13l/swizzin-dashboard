@@ -1,4 +1,5 @@
-// Everything else the pages show: traffic, updates, RAID, CPU health and install or removal jobs.
+// Everything else the pages show: traffic, updates, RAID, platform (DMI, virtualization, CPU vulnerabilities),
+// CPU health and install or removal jobs.
 
 import { lstat, open, readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'

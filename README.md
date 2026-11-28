@@ -8,7 +8,7 @@ A web dashboard for [swizzin](https://swizzin.ltd) seedboxes. It runs next to th
 - **Updates**: whether swizzin, swizdash, the installed apps and the system packages are up to date, with the command to run. The apps are checked against apt, or against their project's latest release on GitHub every 6 hours: GitHub sees which of those apps the server has.
 - **Downloads**: every torrent of rTorrent, qBittorrent, Transmission and Deluge, read only, filtered by status or client.
 - **Header**: search an app to open it, live CPU, memory and network, and the theme button: five glass themes, with the panel opacity and blur to taste.
-- **Open menu**: the installed apps by category, one click away.
+- **Open** (sidebar): the installed apps by category, one click away.
 
 ## Install
 
@@ -56,10 +56,10 @@ The dashboard can start services and run `box` as root, so every layer limits wh
 
 | Path | What |
 |---|---|
-| `server/src/main.ts` | HTTP routes and static files |
+| `server/src/main.ts` | HTTP routes, token and origin checks, static files, the helper-backed reads (SMART, Fail2Ban, quota, downloads) |
 | `server/src/apps.ts` | the catalog, systemd states, installed versions |
 | `server/src/system.ts`, `history.ts` | live usage from /proc, and its SQLite history |
-| `server/src/extra.ts` | traffic, updates (apt, swizzin, GitHub), RAID, CPU health, install and removal jobs |
+| `server/src/extra.ts` | traffic, updates (apt, swizzin, GitHub), RAID, platform (DMI, virtualization, CPU vulnerabilities), CPU health, install and removal jobs |
 | `server/src/parse.ts` | pure parsers, covered by `server/test` |
 | `server/src/helper.ts`, `helper/swizdash-helper` | the sudo bridge, and the root helper whose commands are listed at its end |
 | `server/src/config.ts` | paths, and the `SWIZDASH_*` variables that override them |

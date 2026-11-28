@@ -9,7 +9,8 @@ import { allowedUnit as allowedUnitOf, firstMatch, parseSystemctlShow, statusOf,
 
 /**
  * One entry of catalog/apps.json, the reference for its format. The server, the root helper
- * (helper/swizdash-helper) and server/test/catalog.test.ts read it. {user} stands for the swizzin master.
+ * (helper/swizdash-helper) and server/test/catalog.test.ts read it. {user}, the swizzin master, is replaced
+ * in paths, apikey.file, version.cmd and version.arr only.
  */
 export interface CatalogApp {
   /** name of the swizzin install script, and of its /install/.<id>.lock */
@@ -30,18 +31,21 @@ export interface CatalogApp {
   apikey?: { file: string; type: string; key: string }
   /**
    * how the installed version is read, the first field set wins:
-   * dpkg (package name); cmd + re (command output and the regex capturing the version, run as the master when cmd has {user});
+   * dpkg (package name); cmd + re (command output and the regex capturing the version, the first line without re;
+   * run as the master when cmd has {user}, as swizdash otherwise);
    * git (checkout, git describe); json + key; file (its whole content);
-   * arr + api (the *arr config.xml and API version: the helper asks the app's /api/<api>/system/status)
+   * arr + api (the *arr config.xml, read for Port and UrlBase, and the API version: the helper asks /api/<api>/system/status
+   * with the key from apikey, which it needs)
    */
   version?: { dpkg?: string; cmd?: string; re?: string; git?: string; json?: string; key?: string; file?: string; arr?: string; api?: string }
-  /** where the newest version is read: an apt package, or a GitHub repository's latest release */
+  /** where the newest version is read: an apt package, or a GitHub repository's latest release (needs version, wins over apt).
+   *  Without it, version.dpkg is checked against apt. */
   latest?: { apt?: string; github?: string }
   /** the installer asks questions: only box over SSH installs it */
   interactive?: boolean
   /** the removal script asks questions: only box over SSH removes it */
   removeInteractive?: boolean
-  /** part of the server itself (nginx, swizdash): never installed or removed from the page */
+  /** managed with box over SSH only (nginx, quota, swizdash): never installed or removed from the page */
   core?: boolean
 }
 

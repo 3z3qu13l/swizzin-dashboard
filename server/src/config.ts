@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-// Paths and settings, overridable through SWIZDASH_* variables for development.
+// Paths and settings, overridable through SWIZDASH_* variables (development; SWIZDASH_MASTER comes from the systemd unit).
 // The root helper does not read them: its catalog and jobs paths are fixed, root must not trust this environment.
 
 /** where the release is unpacked */

@@ -3,7 +3,7 @@
 @import '@fontsource-variable/jetbrains-mono';
 
 /* Five themes, each a backdrop of soft color (--b1 to --b4) under frosted glass panels.
-   Aurore is the default. --surface, --surface-2 and --line stay opaque: the charts read them. */
+   Aurore is the default. --surface and --line stay opaque: echarts reads them as plain colours. */
 :root,
 [data-theme='aurore'] {
   --bg: #050b18;
