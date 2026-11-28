@@ -1,8 +1,8 @@
 // Small shared components: buttons, cards, dialogs, menus, pager, status dots.
 
 import { Dialog as D, DropdownMenu as M } from 'radix-ui'
-import { Loader2, X } from 'lucide-react'
-import { useRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { Copy, Loader2, Search, X } from 'lucide-react'
+import { useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { cn } from '@/lib/format'
 import type { Status } from '@/lib/api'
 import type { Tone } from '@/lib/status'
@@ -288,5 +288,78 @@ export function Pager({
         </Button>
       </div>
     </div>
+  )
+}
+
+/** Search field filtering a list; `label` is also its placeholder. */
+export function SearchInput({ value, onChange, label, className }: { value: string; onChange: (v: string) => void; label: string; className?: string }) {
+  return (
+    <div className={cn('relative', className)}>
+      <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={label}
+        aria-label={label}
+        className="h-9 w-full rounded-lg border border-line bg-surface-2/60 pr-3 pl-9 text-sm placeholder:text-muted focus:border-accent/60 focus:outline-none"
+      />
+    </div>
+  )
+}
+
+/** Foot of a confirmation dialog: the error of the last try, Cancel, and the action. */
+export function ConfirmActions({
+  error,
+  busy,
+  disabled,
+  label,
+  variant = 'danger',
+  onCancel,
+  onConfirm,
+}: {
+  error: Error | null
+  busy: boolean
+  disabled?: boolean
+  label: string
+  variant?: 'primary' | 'danger'
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <>
+      {error && <p className="mb-3 text-sm text-danger">{error.message}</p>}
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button variant={variant} disabled={disabled} busy={busy} onClick={onConfirm}>
+          {label}
+        </Button>
+      </div>
+    </>
+  )
+}
+
+/** Copies `text`, and shows it did for a moment. */
+export function CopyButton({ text, label }: { text: string; label: string }) {
+  const [done, setDone] = useState(false)
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label={label}
+      title={done ? 'Copied' : label}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text)
+          setDone(true)
+          setTimeout(() => setDone(false), 1200)
+        } catch {
+          // clipboard needs https, which nginx provides
+        }
+      }}
+    >
+      <Copy className={cn('size-3.5', done && 'text-accent')} />
+    </Button>
   )
 }

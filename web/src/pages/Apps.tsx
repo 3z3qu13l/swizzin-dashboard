@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router'
 import { Badge, Segmented } from '@/components/ui'
 import { RunningJob } from '@/components/RunningJob'
 import { useAppUpdates, useApps } from '@/lib/queries'
+import { isRunning, listedApps } from '@/lib/apps'
 import { AppControl } from './AppControl'
 import { AppUpdates } from './AppUpdates'
 import { Packages } from './Packages'
@@ -19,10 +20,10 @@ export function Apps() {
   const updates = useAppUpdates()
   const n = useMemo(() => {
     const all = apps.data?.apps ?? []
-    const installed = all.filter((a) => a.installed && a.id !== 'swizdash')
+    const installed = listedApps(all)
     return {
       installed: installed.length,
-      running: installed.filter((a) => a.status === 'running' || a.status === 'partial').length,
+      running: installed.filter(isRunning).length,
       stopped: installed.filter((a) => a.status === 'stopped' || a.status === 'failed').length,
       updates: (updates.data ?? []).filter((u) => u.state === 'update').length,
       available: all.filter((a) => !a.installed && a.hasScripts.install).length,

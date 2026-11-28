@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { RefreshCw, Search } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import type { TorrentStatus } from '@/lib/api'
 import { useDownloads } from '@/lib/queries'
 import { ago, bytes, cn, pct, rate } from '@/lib/format'
+import { usePaged } from '@/lib/hooks'
 import type { Tone } from '@/lib/status'
 import { clientNames, downloadKey } from '@/lib/downloads'
-import { Badge, Button, Card, CardHead, Empty, ErrorNote, Pager, Spinner } from '@/components/ui'
+import { Badge, Button, Card, CardHead, Empty, ErrorNote, Pager, SearchInput, Spinner } from '@/components/ui'
 import { BandwidthChart } from './SystemCharts'
 
 const statusLabel: Record<TorrentStatus, string> = {
@@ -34,8 +35,6 @@ export function Downloads() {
   const qc = useQueryClient()
   const [params, setParams] = useSearchParams()
   const [text, setText] = useState('')
-  const [page, setPage] = useState(1)
-  const [perPage, setPerPage] = useState(20)
   const list = useMemo(() => q.data ?? [], [q.data])
   const s = params.get('status')
   const status = s && s in statusLabel ? (s as TorrentStatus) : null
@@ -48,7 +47,7 @@ export function Downloads() {
     if (v === null || next.get(k) === v) next.delete(k)
     else next.set(k, v)
     setParams(next, { replace: true })
-    setPage(1)
+    reset()
   }
 
   const picked = client ? list.filter((d) => downloadKey(d) === client) : list
@@ -62,9 +61,7 @@ export function Downloads() {
       .flatMap((d) => d.items.map((i) => ({ ...i, client: d.client, user: d.user })))
       .filter((i) => (!status || i.status === status) && (!t || i.name.toLowerCase().includes(t)))
   }, [list, client, status, text])
-  const pages = Math.max(1, Math.ceil(rows.length / perPage))
-  const current = Math.min(page, pages)
-  const shown = rows.slice((current - 1) * perPage, current * perPage)
+  const { shown, pager, reset } = usePaged(rows)
   const detail: Record<string, string> = {
     downloading: `↓ ${rate(down)}`,
     seeding: `↑ ${rate(up)}`,
@@ -116,7 +113,7 @@ export function Downloads() {
                   onClick={() => {
                     setParams({}, { replace: true })
                     setText('')
-                    setPage(1)
+                    reset()
                   }}
                 >
                   Show all
@@ -124,16 +121,7 @@ export function Downloads() {
               ) : null
             }
           />
-          <div className="relative mx-5 mb-3">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
-            <input
-              value={text}
-              onChange={(e) => (setText(e.target.value), setPage(1))}
-              placeholder="Find a torrent"
-              aria-label="Find a torrent"
-              className="h-9 w-full rounded-lg border border-line bg-surface-2/60 pr-3 pl-9 text-sm placeholder:text-muted focus:border-accent/60 focus:outline-none"
-            />
-          </div>
+          <SearchInput value={text} onChange={(v) => (setText(v), reset())} label="Find a torrent" className="mx-5 mb-3" />
           {q.isPending ? (
             <Spinner />
           ) : !q.data ? (
@@ -191,7 +179,7 @@ export function Downloads() {
                   </tbody>
                 </table>
               </div>
-              <Pager page={current} pages={pages} onPage={setPage} total={rows.length} perPage={perPage} onPerPage={(n) => (setPerPage(n), setPage(1))} />
+              <Pager {...pager} />
               {list.some((d) => d.truncated) && <p className="px-5 pb-3 text-xs text-muted">A client lists only its first 1000 torrents.</p>}
             </>
           )}

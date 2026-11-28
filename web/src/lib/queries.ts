@@ -43,6 +43,8 @@ export const useDownloads = (withItems = false) =>
     refetchInterval: 60_000,
   })
 export const useJobs = () => useQuery({ queryKey: ['jobs'], queryFn: () => get<Job[]>('/api/jobs'), refetchInterval: 5_000 })
+/** The install or removal box is running, if any: only one runs at a time. */
+export const useRunningJob = () => useJobs().data?.find((j) => j.state === 'running')
 export const useHistory = (range: string) =>
   useQuery({
     queryKey: ['history', range],

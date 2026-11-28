@@ -26,3 +26,16 @@ export function useNow(everyMs = 5000): number {
   }, [everyMs])
   return now
 }
+
+/** One page of `rows` and the props of its Pager. When the list shrinks, the page never stays past the end. */
+export function usePaged<T>(rows: T[]) {
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(20)
+  const pages = Math.max(1, Math.ceil(rows.length / perPage))
+  const current = Math.min(page, pages)
+  return {
+    shown: rows.slice((current - 1) * perPage, current * perPage),
+    reset: () => setPage(1),
+    pager: { page: current, pages, onPage: setPage, total: rows.length, perPage, onPerPage: (n: number) => (setPerPage(n), setPage(1)) },
+  }
+}

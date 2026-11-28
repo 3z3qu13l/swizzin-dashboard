@@ -6,7 +6,7 @@ import { get, post, serverTime, type Meta } from '@/lib/api'
 import { useBandwidth, useLive, useMeta, useSummary } from '@/lib/queries'
 import { ago, bytes, cn, duration, pct, rate } from '@/lib/format'
 import { useNow } from '@/lib/hooks'
-import { Bar, Button, Card, CardHead, Dialog, ErrorNote, Menu, MenuItem, Segmented } from '@/components/ui'
+import { Bar, Button, Card, CardHead, ConfirmActions, Dialog, ErrorNote, Menu, MenuItem, Segmented } from '@/components/ui'
 import { BandwidthChart, HistoryCharts } from './SystemCharts'
 import { Disks, Fail2ban, Hardware } from './SystemHealth'
 
@@ -193,15 +193,7 @@ function Inventory() {
         title="Clear the history?"
         description="The charts start again from now. The apps and their data are not touched."
       >
-        {clear.error && <p className="mb-3 text-sm text-danger">{clear.error.message}</p>}
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => setConfirm(false)}>
-            Cancel
-          </Button>
-          <Button variant="danger" busy={clear.isPending} onClick={() => clear.mutate()}>
-            Clear history
-          </Button>
-        </div>
+        <ConfirmActions error={clear.error} busy={clear.isPending} label="Clear history" onCancel={() => setConfirm(false)} onConfirm={() => clear.mutate()} />
       </Dialog>
     </Card>
   )
