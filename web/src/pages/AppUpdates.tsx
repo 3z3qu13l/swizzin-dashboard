@@ -3,8 +3,7 @@ import { serverTime, type AppUpdate } from '@/lib/api'
 import { useAppUpdates, useApps } from '@/lib/queries'
 import { ago } from '@/lib/format'
 import { AppIcon } from '@/components/AppIcon'
-import { Badge, Card, Empty, ErrorNote, Segmented, Spinner } from '@/components/ui'
-import { CopyButton } from './AppControl'
+import { Badge, Card, CopyButton, Empty, ErrorNote, Segmented, Spinner } from '@/components/ui'
 
 type Filter = 'update' | 'all' | 'unknown'
 

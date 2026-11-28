@@ -1,5 +1,11 @@
 import type { AppRow } from './api'
 
+/** Running, or running some of its units. */
+export const isRunning = (app: Pick<AppRow, 'status'>) => app.status === 'running' || app.status === 'partial'
+
+/** Installed apps the pages list: swizdash is the page itself. */
+export const listedApps = (apps: AppRow[]) => apps.filter((a) => a.installed && a.id !== 'swizdash')
+
 /** Address of the app as the browser reaches it: under the main site, or on its own public port. */
 export function appUrl(app: Pick<AppRow, 'web' | 'link'>): string | null {
   const host = window.location.hostname

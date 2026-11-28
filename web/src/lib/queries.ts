@@ -1,3 +1,5 @@
+// One TanStack Query hook per API resource, with how often each refreshes.
+
 import { useQuery } from '@tanstack/react-query'
 import { get } from './api'
 import type {
@@ -20,7 +22,7 @@ import type {
 
 export const useMeta = () => useQuery({ queryKey: ['meta'], queryFn: () => get<Meta>('/api/meta'), staleTime: Infinity })
 export const useSummary = () => useQuery({ queryKey: ['summary'], queryFn: () => get<Summary>('/api/summary'), refetchInterval: 15_000 })
-export const useApps = () => useQuery({ queryKey: ['apps'], queryFn: () => get<{ apps: AppRow[]; users: string[] }>('/api/apps'), refetchInterval: 8_000 })
+export const useApps = () => useQuery({ queryKey: ['apps'], queryFn: () => get<{ apps: AppRow[] }>('/api/apps'), refetchInterval: 8_000 })
 export const useBandwidth = () => useQuery({ queryKey: ['bandwidth'], queryFn: () => get<Bandwidth>('/api/bandwidth'), refetchInterval: 60_000 })
 export const useUpdates = () => useQuery({ queryKey: ['updates'], queryFn: () => get<Updates>('/api/updates'), staleTime: 5 * 60_000 })
 // the server asks GitHub at most every few hours
@@ -32,7 +34,7 @@ export const useHardware = () => useQuery({ queryKey: ['hardware'], queryFn: () 
 export const useSmart = () => useQuery({ queryKey: ['smart'], queryFn: () => get<Smart>('/api/system/smart'), staleTime: 5 * 60_000 })
 export const useFail2ban = () => useQuery({ queryKey: ['fail2ban'], queryFn: () => get<Fail2ban>('/api/system/fail2ban'), refetchInterval: 60_000 })
 export const useQuota = () => useQuery({ queryKey: ['quota'], queryFn: () => get<Quota>('/api/system/quota'), refetchInterval: 60_000 })
-/** counts for the card; `withItems` adds every torrent, for the open panel only */
+/** counts for the card; `withItems` adds every torrent, for the Downloads page only */
 export const useDownloads = (withItems = false) =>
   useQuery({
     queryKey: ['downloads', withItems],
@@ -41,6 +43,8 @@ export const useDownloads = (withItems = false) =>
     refetchInterval: 60_000,
   })
 export const useJobs = () => useQuery({ queryKey: ['jobs'], queryFn: () => get<Job[]>('/api/jobs'), refetchInterval: 5_000 })
+/** The install or removal box is running, if any: only one runs at a time. */
+export const useRunningJob = () => useJobs().data?.find((j) => j.state === 'running')
 export const useHistory = (range: string) =>
   useQuery({
     queryKey: ['history', range],

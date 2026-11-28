@@ -1,17 +1,18 @@
 import { Fragment, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronRight, Copy, Eye, EyeOff, ExternalLink, Play, RotateCw, Search, Square, Trash2 } from 'lucide-react'
+import { ChevronRight, Eye, EyeOff, ExternalLink, Play, RotateCw, Square, Trash2 } from 'lucide-react'
 import { get, post, type AppInfo, type AppRow, type AppUpdate } from '@/lib/api'
-import { appUrl } from '@/lib/apps'
-import { useAppUpdates, useApps, useJobs } from '@/lib/queries'
+import { appUrl, isRunning, listedApps } from '@/lib/apps'
+import { useAppUpdates, useApps, useRunningJob } from '@/lib/queries'
+import { usePaged } from '@/lib/hooks'
 import { cn } from '@/lib/format'
 import { AppIcon } from '@/components/AppIcon'
-import { Badge, Button, Card, Empty, ErrorNote, Pager, Spinner } from '@/components/ui'
+import { Badge, Button, Card, CopyButton, Empty, ErrorNote, Pager, SearchInput, Spinner } from '@/components/ui'
+import { JobConfirm } from '@/components/JobConfirm'
 import { JobDialog } from '@/components/JobDialog'
-import { Confirm } from './Packages'
 import { statusLabel, statusTone } from '@/lib/status'
 
-export type ControlFilter = 'installed' | 'running' | 'stopped'
+type ControlFilter = 'installed' | 'running' | 'stopped'
 
 function useServiceAction(id: string) {
   const qc = useQueryClient()
@@ -19,29 +20,6 @@ function useServiceAction(id: string) {
     mutationFn: (v: { action: 'start' | 'stop' | 'restart'; unit?: string }) => post(`/api/apps/${id}/service`, v),
     onSettled: () => qc.invalidateQueries({ queryKey: ['apps'] }),
   })
-}
-
-export function CopyButton({ text, label }: { text: string; label: string }) {
-  const [done, setDone] = useState(false)
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      aria-label={label}
-      title={done ? 'Copied' : label}
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text)
-          setDone(true)
-          setTimeout(() => setDone(false), 1200)
-        } catch {
-          // clipboard needs https, which nginx provides
-        }
-      }}
-    >
-      <Copy className={cn('size-3.5', done && 'text-accent')} />
-    </Button>
-  )
 }
 
 const pathLabels: Record<string, string> = { config: 'Configuration', data: 'Data', log: 'Logs', install: 'Program' }
@@ -165,7 +143,7 @@ function Row({
   const svc = useServiceAction(app.id)
   const url = appUrl(app)
   const hasUnits = app.units.length > 0
-  const running = app.status === 'running' || app.status === 'partial'
+  const running = isRunning(app)
   return (
     <Fragment>
       <tr className={cn('border-t border-line', open && 'bg-surface-2/40')}>
@@ -263,14 +241,12 @@ export function AppControl({ filter }: { filter: ControlFilter }) {
   const q = useApps()
   const updates = useAppUpdates()
   const updateOf = useMemo(() => new Map((updates.data ?? []).map((u) => [u.id, u])), [updates.data])
-  const busy = !!useJobs().data?.some((j) => j.state === 'running')
+  const busy = !!useRunningJob()
   const [remove, setRemove] = useState<AppRow | null>(null)
   const [job, setJob] = useState<{ id: string; name: string } | null>(null)
   const [open, setOpen] = useState<string | null>(null)
-  const [page, setPage] = useState(1)
-  const [perPage, setPerPage] = useState(20)
-  const installed = useMemo(() => (q.data?.apps ?? []).filter((a) => a.installed && a.id !== 'swizdash'), [q.data])
-  const running = installed.filter((a) => a.status === 'running' || a.status === 'partial')
+  const installed = useMemo(() => listedApps(q.data?.apps ?? []), [q.data])
+  const running = installed.filter(isRunning)
   const stopped = installed.filter((a) => a.status === 'stopped' || a.status === 'failed')
   const [text, setText] = useState('')
   const t = text.trim().toLowerCase()
@@ -278,23 +254,11 @@ export function AppControl({ filter }: { filter: ControlFilter }) {
     .filter((a) => !t || `${a.name} ${a.category}`.toLowerCase().includes(t))
     // a failed app needs a look before one stopped on purpose
     .sort((a, b) => Number(b.status === 'failed') - Number(a.status === 'failed'))
-  const pages = Math.max(1, Math.ceil(rows.length / perPage))
-  // the list shrinks when apps change state: never stay on a page past the end
-  const current = Math.min(page, pages)
-  const shown = rows.slice((current - 1) * perPage, current * perPage)
+  const { shown, pager, reset } = usePaged(rows)
 
   return (
     <Card>
-      <div className="relative mx-5 mt-4 mb-2 max-w-sm">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
-        <input
-          value={text}
-          onChange={(e) => (setText(e.target.value), setPage(1))}
-          placeholder="Find an app"
-          aria-label="Find an app"
-          className="h-9 w-full rounded-lg border border-line bg-surface-2/60 pr-3 pl-9 text-sm placeholder:text-muted focus:border-accent/60 focus:outline-none"
-        />
-      </div>
+      <SearchInput value={text} onChange={(v) => (setText(v), reset())} label="Find an app" className="mx-5 mt-4 mb-2 max-w-sm" />
       {q.isPending ? (
         <Spinner />
       ) : q.error ? (
@@ -331,10 +295,10 @@ export function AppControl({ filter }: { filter: ControlFilter }) {
               </tbody>
             </table>
           </div>
-          <Pager page={current} pages={pages} onPage={setPage} total={rows.length} perPage={perPage} onPerPage={(n) => (setPerPage(n), setPage(1))} />
+          <Pager {...pager} />
         </>
       )}
-      <Confirm
+      <JobConfirm
         key={remove ? `remove-${remove.id}` : 'none'}
         app={remove}
         kind="remove"

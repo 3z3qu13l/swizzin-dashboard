@@ -1,8 +1,11 @@
+// Everything else the pages show: traffic, updates, RAID, platform (DMI, virtualization, CPU vulnerabilities),
+// CPU health and install or removal jobs.
+
 import { lstat, open, readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { config } from './config.ts'
 import { defaultIface } from './system.ts'
-import { cached, keyed, readText, run } from './util.ts'
+import { cached, keyed, readText, run, swizzinDir, swizzinGit } from './util.ts'
 import { appVersion, boxScripts, catalog, installedIds, type CatalogApp } from './apps.ts'
 import {
   compareVersions,
@@ -61,7 +64,6 @@ export const updates = cached(30 * 60_000, async () => {
 
 // ---------- swizzin and swizdash ----------
 
-const swizzinDir = '/etc/swizzin'
 // a good answer is kept a few hours, a failure 10 minutes so a dead network does not slow every visit
 const remoteTtl = (v: unknown) => (v ? 3 * 3600_000 : 10 * 60_000)
 const remoteTimeout = 8_000
@@ -80,9 +82,6 @@ export interface SoftwareUpdate {
   checkedAt: number | null
   command: string
 }
-
-// --git-dir as box does: git never looks for a repository above /etc/swizzin (etckeeper's /etc)
-const swizzinGit = (args: string[]) => run('git', ['-c', `safe.directory=${swizzinDir}`, `--git-dir=${swizzinDir}/.git`, ...args])
 
 // key: "<url> <ref>"
 const remoteHead = keyed(remoteTtl, async (key) => {
@@ -117,11 +116,16 @@ async function latestReleaseTag(repo: string): Promise<string | null> {
   }
 }
 
-const latestRelease = cached(remoteTtl, async () => {
-  const tag = await latestReleaseTag(swizdashRepo)
-  const version = tag ? versionNumber(tag) : null
-  return version ? { version, at: Date.now() } : null
-})
+/** The version of a repository's latest release and when it was read, each repository kept for `ttl`. */
+const releaseCache = (ttl: (v: unknown) => number) =>
+  keyed(ttl, async (repo) => {
+    const tag = await latestReleaseTag(repo)
+    const version = tag ? versionNumber(tag) : null
+    return version ? { version, at: Date.now() } : null
+  })
+
+const swizdashRelease = releaseCache(remoteTtl)
+const latestRelease = () => swizdashRelease(swizdashRepo)
 
 const exists = (p: string) =>
   stat(p).then(
@@ -199,11 +203,7 @@ export interface AppUpdate {
 const releaseTtl = (v: unknown) => (v ? 6 * 3600_000 : 15 * 60_000)
 
 // key: owner/repo, from the catalog only
-const githubRelease = keyed(releaseTtl, async (repo) => {
-  const tag = await latestReleaseTag(repo)
-  const version = tag ? versionNumber(tag) : null
-  return version ? { version, at: Date.now() } : null
-})
+const githubRelease = releaseCache(releaseTtl)
 
 // apt's own lists, refreshed by the system: no network here
 const aptPolicy = keyed(30 * 60_000, async (pkg) => {

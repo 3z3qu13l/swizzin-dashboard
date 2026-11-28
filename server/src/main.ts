@@ -1,3 +1,5 @@
+// The HTTP server: routes under /api, the built web app, and the background sampler.
+
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { createReadStream, readFileSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
@@ -6,7 +8,7 @@ import { extname, join, normalize } from 'node:path'
 import { timingSafeEqual } from 'node:crypto'
 import { uptime } from 'node:os'
 import { config } from './config.ts'
-import { allowedUnit, appInfo, catalog, catalogApp, forgetVersion, listApps, swizzinUsers } from './apps.ts'
+import { allowedUnit, appInfo, catalog, catalogApp, forgetVersion, listApps } from './apps.ts'
 import { appUpdates, bandwidth, cpuHealth, listJobs, platform, raid, readJob, softwareUpdates, updates } from './extra.ts'
 import { helper, helperJson, HelperError } from './helper.ts'
 import { clearHistory, history, historyStats, startHistory } from './history.ts'
@@ -137,7 +139,7 @@ route('GET', '/api/system/hardware', async () => {
 route('GET', '/api/system/smart', smart)
 route('GET', '/api/system/fail2ban', fail2ban)
 route('GET', '/api/system/quota', quota)
-// the card only needs the counts, the list of torrents goes to the open panel
+// the card only needs the counts, the list of torrents goes to the Downloads page
 route('GET', '/api/downloads', async (_r, _p, url) => {
   const list = (await downloads()) as { items?: unknown[] }[]
   return url.searchParams.get('items') === '0' ? list.map((d) => ({ ...d, items: [] })) : list
@@ -150,7 +152,7 @@ route('POST', '/api/system/power', async (req) => {
   return { ok: true }
 })
 
-route('GET', '/api/apps', async () => ({ apps: await listApps(), users: await swizzinUsers() }))
+route('GET', '/api/apps', async () => ({ apps: await listApps() }))
 route('GET', '/api/apps/:id/info', async (_r, [id]) => {
   if (!catalogApp(id)) throw new HttpError(404, 'Unknown app')
   const { paths, apikey } = await appInfo(id)

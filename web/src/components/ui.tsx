@@ -1,6 +1,8 @@
+// Small shared components: buttons, cards, dialogs, menus, pager, status dots.
+
 import { Dialog as D, DropdownMenu as M } from 'radix-ui'
-import { Loader2, X } from 'lucide-react'
-import { useRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { Copy, Loader2, Search, X } from 'lucide-react'
+import { useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { cn } from '@/lib/format'
 import type { Status } from '@/lib/api'
 import type { Tone } from '@/lib/status'
@@ -210,48 +212,6 @@ export function Dialog({
   )
 }
 
-/** Panel sliding in from the right, for a closer look without leaving the page. */
-export function Sheet({
-  open,
-  onOpenChange,
-  title,
-  description,
-  children,
-  footer,
-}: {
-  open: boolean
-  onOpenChange: (o: boolean) => void
-  title: ReactNode
-  description: string
-  children: ReactNode
-  footer?: ReactNode
-}) {
-  const focusReturn = useFocusReturn()
-  return (
-    <D.Root open={open} onOpenChange={onOpenChange}>
-      <D.Portal>
-        <D.Overlay className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]" />
-        <D.Content
-          {...focusReturn}
-          className="fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl flex-col border-l border-line bg-surface shadow-2xl data-[state=open]:animate-[sheet-in_200ms_ease-out]"
-        >
-          <div className="flex items-center gap-3 border-b border-line px-5 py-4">
-            <D.Title className="flex flex-1 items-center gap-2 text-base font-semibold">{title}</D.Title>
-            <D.Description className="sr-only">{description}</D.Description>
-            <D.Close asChild>
-              <Button variant="ghost" size="icon" aria-label="Close">
-                <X className="size-4" />
-              </Button>
-            </D.Close>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-          {footer && <div className="border-t border-line px-5 py-3 text-xs text-muted">{footer}</div>}
-        </D.Content>
-      </D.Portal>
-    </D.Root>
-  )
-}
-
 export function Menu({ trigger, children }: { trigger: ReactNode; children: ReactNode }) {
   return (
     <M.Root>
@@ -328,5 +288,76 @@ export function Pager({
         </Button>
       </div>
     </div>
+  )
+}
+
+/** Search field filtering a list; `label` is also its placeholder. */
+export function SearchInput({ value, onChange, label, className }: { value: string; onChange: (v: string) => void; label: string; className?: string }) {
+  return (
+    <div className={cn('relative', className)}>
+      <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={label}
+        aria-label={label}
+        className="h-9 w-full rounded-lg border border-line bg-surface-2/60 pr-3 pl-9 text-sm placeholder:text-muted focus:border-accent/60 focus:outline-none"
+      />
+    </div>
+  )
+}
+
+/** Foot of a confirmation dialog: the error of the last try, Cancel, and the action. */
+export function ConfirmActions({
+  error,
+  busy,
+  label,
+  variant = 'danger',
+  onCancel,
+  onConfirm,
+}: {
+  error: Error | null
+  busy: boolean
+  label: string
+  variant?: 'primary' | 'danger'
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <>
+      {error && <p className="mb-3 text-sm text-danger">{error.message}</p>}
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button variant={variant} busy={busy} onClick={onConfirm}>
+          {label}
+        </Button>
+      </div>
+    </>
+  )
+}
+
+/** Copies `text`, and shows it did for a moment. */
+export function CopyButton({ text, label }: { text: string; label: string }) {
+  const [done, setDone] = useState(false)
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label={label}
+      title={done ? 'Copied' : label}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text)
+          setDone(true)
+          setTimeout(() => setDone(false), 1200)
+        } catch {
+          // clipboard needs https, which nginx provides
+        }
+      }}
+    >
+      <Copy className={cn('size-3.5', done && 'text-accent')} />
+    </Button>
   )
 }

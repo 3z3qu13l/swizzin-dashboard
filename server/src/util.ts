@@ -18,6 +18,10 @@ export function run(file: string, args: string[], timeoutMs = 10_000, env: Recor
   })
 }
 
+export const swizzinDir = '/etc/swizzin'
+/** git on swizzin's checkout. --git-dir as box does: git never climbs to a repository above it (etckeeper's /etc). */
+export const swizzinGit = (args: string[]) => run('git', ['-c', `safe.directory=${swizzinDir}`, `--git-dir=${swizzinDir}/.git`, ...args])
+
 /** Runs a shell command line from the root-owned catalog (version probes only). */
 export function sh(cmd: string, timeoutMs = 10_000): Promise<RunResult> {
   return run('/bin/sh', ['-c', cmd], timeoutMs)

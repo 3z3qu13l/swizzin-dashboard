@@ -1,3 +1,5 @@
+// The app catalog, the state of each app's systemd units and its installed version.
+
 import { readFileSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import { config } from './config.ts'
@@ -5,24 +7,45 @@ import { helperJson } from './helper.ts'
 import { cached, keyed, readText, run, sh } from './util.ts'
 import { allowedUnit as allowedUnitOf, firstMatch, parseSystemctlShow, statusOf, type Status, type UnitState } from './parse.ts'
 
-export type { Status, UnitState }
-
+/**
+ * One entry of catalog/apps.json, the reference for its format. The server, the root helper
+ * (helper/swizdash-helper) and server/test/catalog.test.ts read it. {user}, the swizzin master, is replaced
+ * in paths, apikey.file, version.cmd and version.arr only.
+ */
 export interface CatalogApp {
+  /** name of the swizzin install script, and of its /install/.<id>.lock */
   id: string
   name: string
+  /** one of the catalog's `categories` */
   category: string
   desc: string
+  /** systemd units the page shows and controls; a trailing @ is a per-user template (name@user) */
   units: string[]
+  /** path of the app on the main nginx site, null when it has none */
   web: string | null
   /** app on its own public port: fixed, or the listen port of its nginx site */
   link?: { scheme: 'http' | 'https'; port?: number; site?: string; path: string }
+  /** labelled files and folders shown in the app's details */
   paths: Record<string, string>
+  /** the API key shown in the details: `key` read from `file`, of type xml, yaml, ini or json */
   apikey?: { file: string; type: string; key: string }
+  /**
+   * how the installed version is read, the first field set wins:
+   * dpkg (package name); cmd + re (command output and the regex capturing the version, the first line without re;
+   * run as the master when cmd has {user}, as swizdash otherwise);
+   * git (checkout, git describe); json + key; file (its whole content);
+   * arr + api (the *arr config.xml, read for Port and UrlBase, and the API version: the helper asks /api/<api>/system/status
+   * with the key from apikey, which it needs)
+   */
   version?: { dpkg?: string; cmd?: string; re?: string; git?: string; json?: string; key?: string; file?: string; arr?: string; api?: string }
-  /** where the newest version is read: an apt package, or a GitHub repository's latest release */
+  /** where the newest version is read: an apt package, or a GitHub repository's latest release (needs version, wins over apt).
+   *  Without it, version.dpkg is checked against apt. */
   latest?: { apt?: string; github?: string }
+  /** the installer asks questions: only box over SSH installs it */
   interactive?: boolean
+  /** the removal script asks questions: only box over SSH removes it */
   removeInteractive?: boolean
+  /** managed with box over SSH only (nginx, quota, swizdash): never installed or removed from the page */
   core?: boolean
 }
 
@@ -36,18 +59,6 @@ const byId = new Map(catalog.apps.map((a) => [a.id, a]))
 
 export function catalogApp(id: string): CatalogApp | undefined {
   return byId.get(id)
-}
-
-export async function swizzinUsers(): Promise<string[]> {
-  try {
-    return (await readdir('/etc/htpasswd.d'))
-      .filter((f) => f.startsWith('htpasswd.'))
-      .map((f) => f.slice('htpasswd.'.length))
-      .filter((u) => /^[a-z_][a-z0-9_.-]*$/.test(u))
-      .sort()
-  } catch {
-    return config.master ? [config.master] : []
-  }
 }
 
 export async function installedIds(): Promise<Set<string>> {

@@ -1,5 +1,5 @@
 {
-  "_comment": "One entry per swizzin install script. units: systemd units, a trailing @ is a per-user template. web: path on the main site. link: an app on its own port, fixed or read from its nginx site. paths: {user} is the swizzin master. interactive: the installer asks questions, only box on SSH can install it. version: how the root helper reads the installed version.",
+  "_comment": "One entry per swizzin install script. Every field is described on CatalogApp in server/src/apps.ts.",
   "categories": [
     "Download Clients",
     "Media Management",

@@ -2,7 +2,7 @@ import { Link, Navigate, useSearchParams } from 'react-router'
 import { ExternalLink, LayoutGrid } from 'lucide-react'
 import { useApps, useMeta } from '@/lib/queries'
 import { useAttention } from '@/lib/attention'
-import { appUrl } from '@/lib/apps'
+import { appUrl, isRunning } from '@/lib/apps'
 import { AppIcon } from '@/components/AppIcon'
 import { Card, CardHead, Empty, Spinner } from '@/components/ui'
 import { Overview } from './Overview'
@@ -21,7 +21,7 @@ function Chip({ to, tone, children }: { to: string; tone: 'danger' | 'info' | 'w
 
 function OpenApps() {
   const apps = useApps()
-  const list = (apps.data?.apps ?? []).filter((a) => a.installed && appUrl(a) && (a.status === 'running' || a.status === 'partial'))
+  const list = (apps.data?.apps ?? []).filter((a) => a.installed && appUrl(a) && isRunning(a))
   return (
     <Card>
       <CardHead icon={<LayoutGrid className="size-4" />} title="Open an app" hint={apps.data ? `${list.length} running with a web page` : undefined} />

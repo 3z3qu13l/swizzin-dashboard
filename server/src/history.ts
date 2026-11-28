@@ -71,7 +71,7 @@ export function startHistory(): void {
   }, 60_000).unref()
 }
 
-export const ranges: Record<string, { span: number; bucket: number }> = {
+const ranges: Record<string, { span: number; bucket: number }> = {
   '5m': { span: 300_000, bucket: 10_000 },
   '15m': { span: 900_000, bucket: 10_000 },
   '1h': { span: 3600_000, bucket: 30_000 },

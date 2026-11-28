@@ -1,3 +1,5 @@
+// Types of the server's answers, and the JSON fetch helpers the queries use.
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {

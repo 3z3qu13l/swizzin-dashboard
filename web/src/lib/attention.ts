@@ -1,3 +1,4 @@
+import { isRunning, listedApps } from './apps'
 import { useAppUpdates, useApps, useSoftwareUpdates, useUpdates } from './queries'
 
 /** What needs a look, shared by the Home page and the menu counters. */
@@ -6,7 +7,7 @@ export function useAttention() {
   const appUpdates = useAppUpdates()
   const software = useSoftwareUpdates()
   const packages = useUpdates()
-  const installed = (apps.data?.apps ?? []).filter((a) => a.installed && a.id !== 'swizdash')
+  const installed = listedApps(apps.data?.apps ?? [])
   const failed = installed.filter((a) => a.status === 'failed')
   const apps2update = (appUpdates.data ?? []).filter((u) => u.state === 'update').length
   const self = (software.data ?? []).filter((s) => s.state === 'update').length
@@ -16,7 +17,7 @@ export function useAttention() {
     checked: !!(apps.data && appUpdates.data && software.data && packages.data),
     failedCheck: !!(apps.error || appUpdates.error || software.error || packages.error),
     installed: installed.length,
-    running: installed.filter((a) => a.status === 'running' || a.status === 'partial').length,
+    running: installed.filter(isRunning).length,
     failed,
     apps2update,
     self,
