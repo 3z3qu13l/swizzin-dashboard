@@ -255,30 +255,6 @@
       }
     },
     {
-      "id": "homepage",
-      "name": "Homepage",
-      "category": "Monitoring",
-      "desc": "Start page with links and widgets for your apps",
-      "units": ["homepage"],
-      "web": null,
-      "paths": {
-        "config": "/home/{user}/.config/homepage",
-        "install": "/opt/homepage"
-      },
-      "version": {
-        "json": "/opt/homepage/package.json",
-        "key": "version"
-      },
-      "link": {
-        "scheme": "https",
-        "site": "homepage",
-        "path": "/"
-      },
-      "latest": {
-        "github": "gethomepage/homepage"
-      }
-    },
-    {
       "id": "jackett",
       "name": "Jackett",
       "category": "Indexers",
