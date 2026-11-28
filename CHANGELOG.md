@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.10
 
 - The Home, Apps and Updates pages no longer load the charts library (184 kB gzipped).
 - The Server card shows swizzin's version even when /etc is kept in git (etckeeper).
