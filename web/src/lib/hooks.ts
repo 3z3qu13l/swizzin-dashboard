@@ -3,9 +3,7 @@ import { useEffect, useState } from 'react'
 const read = () => {
   const s = getComputedStyle(document.documentElement)
   const v = (n: string) => s.getPropertyValue(`--${n}`).trim()
-  return Object.fromEntries(
-    ['text', 'muted', 'line', 'surface', 'surface-2', 'accent', 'cpu', 'mem', 'disk', 'swap', 'warn', 'danger', 'info'].map((k) => [k, v(k)]),
-  )
+  return Object.fromEntries(['text', 'muted', 'line', 'surface', 'accent', 'cpu', 'mem', 'swap', 'warn', 'danger', 'info'].map((k) => [k, v(k)]))
 }
 
 /** Theme colors for the charts, updated when the theme changes. */

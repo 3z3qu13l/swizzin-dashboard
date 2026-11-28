@@ -1,8 +1,10 @@
+// Everything else the pages show: traffic, updates, RAID, CPU health and install or removal jobs.
+
 import { lstat, open, readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { config } from './config.ts'
 import { defaultIface } from './system.ts'
-import { cached, keyed, readText, run } from './util.ts'
+import { cached, keyed, readText, run, swizzinDir, swizzinGit } from './util.ts'
 import { appVersion, boxScripts, catalog, installedIds, type CatalogApp } from './apps.ts'
 import {
   compareVersions,
@@ -61,7 +63,6 @@ export const updates = cached(30 * 60_000, async () => {
 
 // ---------- swizzin and swizdash ----------
 
-const swizzinDir = '/etc/swizzin'
 // a good answer is kept a few hours, a failure 10 minutes so a dead network does not slow every visit
 const remoteTtl = (v: unknown) => (v ? 3 * 3600_000 : 10 * 60_000)
 const remoteTimeout = 8_000
@@ -80,9 +81,6 @@ export interface SoftwareUpdate {
   checkedAt: number | null
   command: string
 }
-
-// --git-dir as box does: git never looks for a repository above /etc/swizzin (etckeeper's /etc)
-const swizzinGit = (args: string[]) => run('git', ['-c', `safe.directory=${swizzinDir}`, `--git-dir=${swizzinDir}/.git`, ...args])
 
 // key: "<url> <ref>"
 const remoteHead = keyed(remoteTtl, async (key) => {

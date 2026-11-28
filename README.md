@@ -3,11 +3,12 @@
 A web dashboard for [swizzin](https://swizzin.ltd) seedboxes. It runs next to the swizzin panel, on its own HTTPS port, behind the swizzin login of the master user.
 
 - **Home**: what needs a look (failed apps, pending updates), disk space, CPU and memory, active torrents, and the running apps to open.
-- **System**: live usage, 30 days of history, daily traffic (vnStat), hardware, CPU vulnerabilities, thermal throttling and ECC memory errors, RAID and SMART, Fail2Ban bans; restart or shut down the server.
-- **Apps**: every installed app with its status, version, port, services, files and API key. Start, stop, restart, open or remove each app, and install the others with `box`, following the log while it runs.
+- **System**: an Activity tab with live usage, 30 days of history and daily traffic (vnStat); a Health tab with hardware, CPU vulnerabilities, thermal throttling and ECC memory errors, RAID and SMART, Fail2Ban bans. Copy a diagnostic for a bug report, clear the history, restart or shut down the server.
+- **Apps**: every installed app with its status, version, port, services, files and API key, filtered by installed, running, stopped, with an update, or available. Start, stop, restart, open or remove each app, and install the others with `box`, following the log while it runs.
 - **Updates**: whether swizzin, swizdash, the installed apps and the system packages are up to date, with the command to run. The apps are checked against apt, or against their project's latest release on GitHub every 6 hours: GitHub sees which of those apps the server has.
 - **Downloads**: every torrent of rTorrent, qBittorrent, Transmission and Deluge, read only, filtered by status or client.
-- **Open menu**: the installed apps by category, one click away. Five glass themes, with the panel opacity and blur to taste.
+- **Header**: search an app to open it, live CPU, memory and network, and the theme button: five glass themes, with the panel opacity and blur to taste.
+- **Open menu**: the installed apps by category, one click away.
 
 ## Install
 
@@ -49,7 +50,23 @@ The dashboard can start services and run `box` as root, so every layer limits wh
 
 ### The catalog
 
-`catalog/apps.json` describes the apps `box` can install: category, systemd units (a trailing `@` is a per-user unit), web path, files, where the API key is, how to read the version, and whether the installer asks questions. An app missing from the catalog is not shown.
+`catalog/apps.json` describes the apps `box` can install: category, systemd units (a trailing `@` is a per-user unit), web path, files, where the API key is, how to read the version, and whether the installer asks questions. An app missing from the catalog is not shown. Each field is described on `CatalogApp` in `server/src/apps.ts`.
+
+### Code layout
+
+| Path | What |
+|---|---|
+| `server/src/main.ts` | HTTP routes and static files |
+| `server/src/apps.ts` | the catalog, systemd states, installed versions |
+| `server/src/system.ts`, `history.ts` | live usage from /proc, and its SQLite history |
+| `server/src/extra.ts` | traffic, updates (apt, swizzin, GitHub), RAID, CPU health, install and removal jobs |
+| `server/src/parse.ts` | pure parsers, covered by `server/test` |
+| `server/src/helper.ts`, `helper/swizdash-helper` | the sudo bridge, and the root helper whose commands are listed at its end |
+| `server/src/config.ts` | paths, and the `SWIZDASH_*` variables that override them |
+| `web/src/pages`, `components`, `lib` | the pages, shared components, API client and queries (`lib/queries.ts`) |
+| `web/public/theme.js` | applies the saved theme before the first paint |
+
+nginx, systemd, sudo and the pinned release are set up by swizzin: `sources/functions/swizdash` and `scripts/{install,remove,upgrade}/swizdash.sh` in [3z3qu13l/swizzin](https://github.com/3z3qu13l/swizzin).
 
 ## Development
 
@@ -67,7 +84,7 @@ To try a local build: `SWIZDASH_ARCHIVE=/root/swizdash.tar.gz box install swizda
 
 ## Release
 
-1. Set the version in `package.json` and `web/package.json`, and give the `CHANGELOG.md` section that number.
+1. Set the version in `package.json`, `web/package.json` and `web/package-lock.json` (twice), and give the `CHANGELOG.md` section that number.
 2. Push a matching tag (`v0.1.2`). The Release workflow checks, tests, builds and publishes `swizdash.tar.gz` and its `.sha256`.
 3. In [3z3qu13l/swizzin](https://github.com/3z3qu13l/swizzin), set `swizdash_version` and `swizdash_sha256` in `sources/functions/swizdash`: `box install` and `box upgrade` only install that release.
 

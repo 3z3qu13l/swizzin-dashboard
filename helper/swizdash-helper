@@ -185,7 +185,7 @@ cmd_job() {
     echo "$id"
 }
 
-# the install and remove scripts box has, /etc/swizzin is readable by root only
+# the install, remove and upgrade scripts box has, /etc/swizzin is readable by root only
 cmd_scripts() {
     local kind
     for kind in install remove upgrade; do

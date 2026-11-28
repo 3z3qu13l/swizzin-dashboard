@@ -1,6 +1,8 @@
+// Live usage read from /proc and /sys: CPU, memory, disks, network, sensors, OS details.
+
 import { statfs, readdir } from 'node:fs/promises'
 import os from 'node:os'
-import { readText, run, cached } from './util.ts'
+import { readText, run, cached, swizzinGit } from './util.ts'
 
 interface CpuTimes {
   total: number
@@ -54,7 +56,7 @@ async function netCounters(iface: string | null): Promise<NetCounters | null> {
   return { rx: f[0], tx: f[8], at: Date.now() }
 }
 
-export async function meminfo(): Promise<Record<string, number>> {
+async function meminfo(): Promise<Record<string, number>> {
   const text = (await readText('/proc/meminfo')) ?? ''
   const out: Record<string, number> = {}
   for (const l of text.split('\n')) {
@@ -110,7 +112,7 @@ async function sample(): Promise<Live> {
   }
 }
 
-export function round(n: number, d = 1): number {
+function round(n: number, d = 1): number {
   const f = 10 ** d
   return Math.round(n * f) / f
 }
@@ -241,8 +243,7 @@ export const osInfo = cached(3600_000, async () => {
   const rel = (await readText('/etc/os-release')) ?? ''
   const get = (k: string) => new RegExp(`^${k}="?([^"\\n]*)"?`, 'm').exec(rel)?.[1] ?? null
   const nginx = await run('nginx', ['-v'])
-  const sqlite = await run('sqlite3', ['--version'])
-  const swizzin = await run('git', ['-c', 'safe.directory=*', '-C', '/etc/swizzin', 'log', '-1', '--format=%h %cs'])
+  const swizzin = await swizzinGit(['log', '-1', '--format=%h %cs'])
   return {
     os: get('PRETTY_NAME'),
     codename: get('VERSION_CODENAME'),
@@ -251,7 +252,7 @@ export const osInfo = cached(3600_000, async () => {
     hostname: os.hostname(),
     node: process.version,
     nginx: /nginx\/(\S+)/.exec(nginx.stderr)?.[1] ?? null,
-    sqlite: process.versions.sqlite ?? (sqlite.ok ? sqlite.stdout.split(' ')[0] : null),
+    sqlite: process.versions.sqlite ?? null,
     swizzin: swizzin.ok ? swizzin.stdout.trim() : null,
   }
 })
